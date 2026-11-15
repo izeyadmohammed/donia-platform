@@ -1,0 +1,183 @@
+import { supabase, store } from '../config.js';
+import { escapeHtml, formatMoney, formatDate } from '../utils.js';
+import { toast, modal } from '../ui.js';
+
+export default async function studentView(el) {
+  const { store } = await import('../config.js');
+  
+  if (!store.profile || store.profile.role !== 'student') {
+    el.innerHTML = `<div class="text-center py-20 text-red-500"><i class="fa-solid fa-lock text-6xl mb-4"></i><h2 class="text-2xl font-bold">غير مصرح</h2><p class="text-muted mt-2">يجب تسجيل الدخول كطالب</p><a href="#/login" class="btn-primary inline-block mt-4">تسجيل الدخول</a></div>`;
+    return;
+  }
+
+  const p = store.profile;
+  if (!p) { el.innerHTML = `<p class="text-center">سجّل دخول</p>`; return; }
+  
+  // جلب الكورسات المشترك فيها
+  const myCourses = store.courses.filter(c => p.enrolled_courses?.includes(c.id));
+  const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', p.id).order('created_at', { ascending: false }).limit(10);
+  const { data: subs } = await supabase.from('exam_submissions').select('*').eq('student_id', p.id).order('submitted_at', { ascending: false });
+
+  el.innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-up">
+      <!-- كارت الطالب -->
+      <div class="glass-card p-6 col-span-1 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl"></div>
+        <div class="relative z-10">
+          <div class="relative w-24 h-24 mx-auto mb-4">
+            <div class="w-24 h-24 bg-gradient-to-br from-blue-500 to-sky-600 rounded-2xl flex items-center justify-center text-4xl shadow-lg shadow-blue-500/30 overflow-hidden">
+              ${p.image ? `<img src="${p.image}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-user text-white"></i>`}
+            </div>
+            <button id="upload-profile" class="absolute bottom-0 right-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs border-2 border-white dark:border-gray-900 shadow-lg">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <h2 class="text-2xl font-black mb-1">${escapeHtml(p.name)}</h2>
+          <p class="text-sm text-muted mb-1">${escapeHtml(p.phone||'')}</p>
+          <p class="text-sm text-muted mb-4">${escapeHtml(p.grade||'')}</p>
+          
+          <!-- المحفظة -->
+          <button id="wallet-btn" class="w-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 hover:from-green-500/30 hover:to-emerald-500/30 border border-green-500/30 p-4 rounded-xl transition text-right group">
+            <p class="text-xs text-green-400 mb-1 flex justify-between items-center">
+              <span>رصيد المحفظة</span>
+              <i class="fa-solid fa-plus bg-green-500/20 w-6 h-6 rounded-full flex items-center justify-center text-xs group-hover:scale-110 transition"></i>
+            </p>
+            <p class="text-3xl font-black text-green-400">${formatMoney(p.wallet)}</p>
+          </button>
+        </div>
+      </div>
+
+      <!-- أدوات سريعة -->
+      <div class="glass-card p-6 col-span-2">
+        <h3 class="font-bold text-lg mb-4 text-main">أدوات سريعة</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <a href="#/courses" class="flex items-center gap-3 p-4 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition font-bold">
+            <i class="fa-solid fa-book text-xl"></i> كورساتي
+          </a>
+          <button id="pw" class="flex items-center gap-3 p-4 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 transition text-right font-bold">
+            <i class="fa-solid fa-key text-xl"></i> تغيير كلمة المرور
+          </button>
+        </div>
+      </div>
+
+      <!-- المعاملات -->
+      <div class="glass-card p-6">
+        <h3 class="font-bold text-lg mb-4 text-main">آخر المعاملات</h3>
+        ${(txs||[]).length === 0 ? '<p class="text-muted text-sm text-center py-4">لا توجد معاملات</p>' : `
+          <div class="space-y-2">
+            ${txs.map(t => `
+              <div class="flex justify-between items-center p-3 rounded-lg bg-soft border border-border text-sm">
+                <div>
+                  <p class="font-bold">${escapeHtml(t.note||'-')}</p>
+                  <p class="text-xs text-muted">${formatDate(t.created_at)}</p>
+                </div>
+                <span class="${t.type==='credit'?'text-green-400':'text-red-400'} font-black">
+                  ${t.type==='credit'?'+':'-'}${formatMoney(t.amount)}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+
+      <!-- الدرجات -->
+      <div class="glass-card p-6 col-span-2">
+        <h3 class="font-bold text-lg mb-4 text-main">سجل الدرجات</h3>
+        ${(subs||[]).length === 0 ? '<p class="text-muted text-sm text-center py-4">لا توجد درجات</p>' : `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ${subs.map(s => `
+              <div class="p-3 rounded-lg bg-soft border border-border text-sm">
+                <div class="flex justify-between items-start mb-2">
+                  <p class="font-bold">${escapeHtml(s.type==='mcq'?'اختبار MCQ':'واجب')}</p>
+                  <span class="px-2 py-1 rounded text-xs ${s.status === 'تم التصحيح' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${escapeHtml(s.status)}</span>
+                </div>
+                <div class="flex justify-between items-end">
+                  <p class="text-xs text-muted">${formatDate(s.submitted_at)}</p>
+                  <span class="font-black text-lg text-blue-400">${s.grade ?? '-'} ${s.total?(' / '+s.total):''}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  // فتح المحفظة (كود الشحن)
+  el.querySelector('#wallet-btn').onclick = () => {
+    const m = modal({ 
+      title: 'شحن المحفظة', 
+      body: `<input id="code-inp" class="input-field text-center text-lg font-mono mb-3" placeholder="أدخل كود الشحن هنا" dir="ltr">
+        <a href="https://wa.me/${store.settings?.support_whatsapp || '201126346329'}" target="_blank" class="block text-center text-sm text-green-500 hover:underline mt-2">
+          <i class="fa-brands fa-whatsapp"></i> مش معاك كود؟ تواصل مع الدعم
+        </a>`, 
+      actions: `<button id="cbtn" class="btn-accent w-full">شحن الآن</button>` 
+    });
+    m.root.querySelector('#cbtn').onclick = async () => {
+      const code = m.root.querySelector('#code-inp').value.trim();
+      if (!code) return;
+      try { 
+        const { error } = await supabase.rpc('redeem_code', { code_input: code }); 
+        if (error) throw new Error(error.message); 
+        toast('تم الشحن بنجاح', 'success'); m.close(); 
+        const { loadProfile } = await import('../auth.js'); await loadProfile(); 
+        location.reload(); 
+      } catch (e) { toast(e.message, 'error'); }
+    };
+  };
+
+  // رفع الصورة الشخصية
+  el.querySelector('#upload-profile').onclick = () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      toast('جاري رفع الصورة...', 'info');
+      const fileName = `profile_${store.profile.id}_${crypto.randomUUID()}.${file.name.split('.').pop()}`;
+      const { error } = await supabase.storage.from('images').upload(fileName, file);
+      if (error) { toast('فشل الرفع', 'error'); return; }
+      const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+      await supabase.from('profiles').update({ image: data.publicUrl }).eq('id', store.profile.id);
+      store.profile.image = data.publicUrl;
+      toast('تم تحديث الصورة', 'success');
+      location.reload();
+    };
+    fileInput.click();
+  };
+
+  // تغيير الباسورد (بالتحقق من القديم)
+  el.querySelector('#pw').onclick = () => {
+    const m = modal({ 
+      title: 'تغيير كلمة المرور', 
+      body: `
+        <div class="space-y-3">
+          <input id="old-pw" type="password" placeholder="كلمة المرور الحالية" class="input-field">
+          <input id="new-pw" type="password" placeholder="كلمة المرور الجديدة (8 أحرف على الأقل)" class="input-field">
+        </div>`, 
+      actions: `<button id="sbtn" class="btn-primary w-full">تغيير</button>` 
+    });
+    
+    m.root.querySelector('#sbtn').onclick = async () => {
+      const oldPw = m.root.querySelector('#old-pw').value;
+      const newPw = m.root.querySelector('#new-pw').value;
+      
+      if (!oldPw) { toast('اكتب كلمة المرور الحالية', 'warn'); return; }
+      if (newPw.length < 8) { toast('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل', 'warn'); return; }
+      
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        // التحقق من الباسورد الحالي أولاً
+          const email = `${store.profile.phone.replace(/\s/g, '')}@edu.local`;
+          const { error: loginError } = await supabase.auth.signInWithPassword({ email, password: oldPw });
+          if (loginError) { toast('كلمة المرور الحالية غير صحيحة', 'error'); return; }
+
+          const { error: updateError } = await supabase.auth.updateUser({ password: newPw });
+          if (updateError) throw new Error(updateError.message);
+        
+        toast('تم تغيير كلمة المرور بنجاح', 'success');
+        m.close();
+      } catch (e) { toast(e.message, 'error'); }
+    };
+  };
+}

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="google-site-verification" content="p-2ud18BU5svk6MeaxS8JHzjZuw15GxWc_6JCVYz7IE" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="page-title">منصة التعليم الذكي</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['IBM Plex Sans Arabic', 'sans-serif'] } } }
+    }
+  </script>
+  <script type="module" src="js/init.js"></script>
+<link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563EB">
+</head>
+<body class="antialiased selection:bg-blue-500/30">
+  <!-- شريط تثبيت التطبيق -->
+  <div id="install-banner" class="hidden fixed top-0 left-0 w-full bg-blue-600 text-white p-3 flex justify-between items-center z-[9999] shadow-lg">
+    <div class="flex items-center gap-3">
+      <i class="fa-solid fa-graduation-cap text-2xl"></i>
+      <span class="font-bold text-sm md:text-base">ثبّت التطبيق على جهازك للوصول السريع</span>
+    </div>
+    <div class="flex gap-2">
+      <button id="install-btn" class="bg-white text-blue-600 px-4 py-1.5 rounded-lg font-bold text-sm hover:bg-gray-100 transition">تثبيت</button>
+      <button id="close-install" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+    </div>
+  </div>
+
+  <header id="app-header" class="sticky top-0 z-[800]"></header>
+  <main id="app-main" class="flex-1 container mx-auto px-4 pt-6 pb-10 max-w-7xl"></main>
+  <footer id="app-footer"></footer>
+  
+  <div id="toast-container" class="fixed top-6 left-6 z-[9999] space-y-3"></div>
+  <div id="modal-root"></div>
+<script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js");
+      });
+    }
+
+    let deferredPrompt;
+    const installBanner = document.getElementById('install-banner');
+    const installBtn = document.getElementById('install-btn');
+    const closeInstall = document.getElementById('close-install');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      // إظهار الشريط
+      installBanner.classList.remove('hidden');
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        }
+        deferredPrompt = null;
+        installBanner.classList.add('hidden');
+      }
+    });
+
+    closeInstall.addEventListener('click', () => {
+      installBanner.classList.add('hidden');
+    });
+  </script>
+</body>
+</html>
