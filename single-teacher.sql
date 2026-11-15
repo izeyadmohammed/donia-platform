@@ -52,7 +52,7 @@ $$;
 
 -- 3) الصف الافتراضي للإعدادات
 INSERT INTO settings (id, platform_name, teacher_name, teacher_title)
-VALUES (1, 'منصتي التعليمية', 'اسم المدرس', 'مدرس')
+VALUES (1, 'منصتي التعليمية', 'مس اسم المدرسة', 'مدرسة العلوم')
 ON CONFLICT (id) DO NOTHING;
 
 -- 4) Storage: bucket عام للصور (صورة المدرس والكورسات)

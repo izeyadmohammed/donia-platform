@@ -64,61 +64,65 @@ export async function renderHeader() {
   const staff = p && ['teacher', 'assistant', 'super_admin'].includes(p.role);
   const unread = (store.notifications || []).filter(n => !n.read).length;
   const brand = s.teacher_name || s.platform_name || 'منصة التعليم';
-  const img = s.teacher_image || s.logo_url;
+  const img = s.logo_url || s.teacher_image;
   const isDark = document.documentElement.classList.contains('dark');
   const coursesHref = staff ? '#/teacher/courses' : '#/courses';
-  const homeAccount = !p ? '#/login' : p.role === 'student' ? '#/student' : p.role === 'super_admin' ? '#/admin' : '#/teacher';
-  const accountLabel = !p ? 'دخول' : p.role === 'student' ? 'حسابي' : 'لوحتي';
-  const accountIcon = !p ? 'fa-right-to-bracket' : p.role === 'student' ? 'fa-user' : 'fa-gauge';
-  const wa = s.support_whatsapp;
+  const dash = !p ? '#/login' : p.role === 'student' ? '#/student' : p.role === 'super_admin' ? '#/admin' : '#/teacher';
+  const links = [['#/home', 'الرئيسية'], [coursesHref, 'الكورسات'], ['#/about', 'عن المدرسة'], ['#/contact', 'تواصل معنا']];
+  if (p) links.push([dash, staff ? 'لوحة التحكم' : 'حسابي']);
+  const initial = (p?.name || '؟').trim().charAt(0);
 
   h.innerHTML = `
-    <div class="max-w-7xl mx-auto px-3 pt-3">
-      <div class="nav-bar flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5">
+    <nav class="site-nav">
+      <div class="max-w-7xl mx-auto px-3 sm:px-6 h-full flex items-center justify-between gap-3">
         <a href="#/home" class="flex items-center gap-3 min-w-0">
-          ${img ? `<img src="${img}" class="w-11 h-11 rounded-2xl object-cover object-top border-2 border-blue-500/30">` : `<span class="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500 text-white flex items-center justify-center"><i class="fa-solid fa-graduation-cap"></i></span>`}
-          <span class="font-black text-lg text-main truncate leading-tight">${brand}${s.teacher_title ? `<small class="block text-xs font-semibold text-muted">${s.teacher_title}</small>` : ''}</span>
+          ${img ? `<img src="${img}" class="h-11 w-11 rounded-full object-cover object-top border-2 border-white/40 bg-white/20">` : `<span class="h-11 w-11 rounded-full bg-white/20 flex items-center justify-center text-xl"><i class="fa-solid fa-atom"></i></span>`}
+          <span class="font-head text-lg sm:text-xl truncate">${brand}</span>
         </a>
-        <nav class="hidden md:flex items-center gap-1">
-          <a data-nav href="#/home" class="nav-pill">الرئيسية</a>
-          <a data-nav href="${coursesHref}" class="nav-pill">الكورسات</a>
-          <a data-nav href="#/about" class="nav-pill">عن المدرس</a>
-          <a data-nav href="#/contact" class="nav-pill">تواصل</a>
-          ${p ? `<a data-nav href="${homeAccount}" class="nav-pill">${accountLabel}</a>` : ''}
-        </nav>
+        <div class="hidden md:flex items-center gap-1">
+          ${links.map(l => `<a data-nav href="${l[0]}" class="nav-link">${l[1]}</a>`).join('')}
+        </div>
         <div class="flex items-center gap-2">
-          ${p?.role === 'student' ? `<button id="wallet-header-btn" class="hidden sm:flex items-center gap-2 px-3 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 font-bold text-sm"><i class="fa-solid fa-wallet"></i>${formatMoney(p.wallet || 0)}</button>` : ''}
-          ${wa ? `<a href="https://wa.me/${wa}" target="_blank" class="icon-btn hidden sm:flex" title="الدعم"><i class="fa-brands fa-whatsapp"></i></a>` : ''}
-          ${p ? `<a href="#/notifications" class="icon-btn"><i class="fa-regular fa-bell"></i>${unread ? `<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">${unread}</span>` : ''}</a>` : ''}
-          <button id="dark-toggle" class="icon-btn" title="الوضع الليلي"><i class="fa-solid ${isDark ? 'fa-sun' : 'fa-moon'}"></i></button>
-          ${p ? `<button id="logout-btn" class="icon-btn" title="خروج"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>`
-              : `<a href="#/signup" class="btn-primary text-sm !py-2 hidden sm:inline-flex">حساب جديد</a>`}
+          ${p?.role === 'student' ? `<button id="wallet-header-btn" class="hidden sm:flex items-center gap-2 px-3 h-10 rounded-full bg-white/20 font-bold text-sm"><i class="fa-solid fa-wallet"></i>${formatMoney(p.wallet || 0)}</button>` : ''}
+          ${p ? `<a href="#/notifications" class="nav-icon"><i class="fa-regular fa-bell"></i>${unread ? `<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">${unread}</span>` : ''}</a>` : ''}
+          <button id="dark-toggle" class="nav-icon" title="الوضع الليلي"><i class="fa-solid ${isDark ? 'fa-sun' : 'fa-moon'}"></i></button>
+          ${p ? `<div class="relative">
+              <button id="user-btn" class="nav-icon font-black">${initial}</button>
+              <div id="user-drop" class="nav-drop">
+                <a href="#/home"><i class="fa-solid fa-house text-blue-500 w-5"></i>الصفحة الرئيسية</a>
+                <a href="${dash}"><i class="fa-solid fa-user text-blue-500 w-5"></i>${staff ? 'لوحة التحكم' : 'حسابي'}</a>
+                ${p.role === 'student' ? `<a href="#" id="drop-charge"><i class="fa-solid fa-qrcode text-blue-500 w-5"></i>شحن كود</a><a href="#/student"><i class="fa-solid fa-book-open text-blue-500 w-5"></i>كورساتي</a>` : ''}
+                <a href="#" id="logout-btn"><i class="fa-solid fa-arrow-right-from-bracket text-red-500 w-5"></i>تسجيل خروج</a>
+              </div></div>`
+            : `<a href="#/login" class="hidden sm:inline-flex nav-link">دخول</a><a href="#/signup" class="hidden sm:inline-flex bg-white text-blue-700 font-black rounded-full px-5 py-2 text-sm">حساب جديد</a>`}
+          <button id="burger" class="nav-icon md:hidden"><i class="fa-solid fa-bars"></i></button>
         </div>
       </div>
-    </div>
-    <div class="bottom-nav">
-      <a data-nav href="#/home"><i class="fa-solid fa-house"></i>الرئيسية</a>
-      <a data-nav href="${coursesHref}"><i class="fa-solid fa-book-open"></i>الكورسات</a>
-      <a data-nav href="${homeAccount}"><i class="fa-solid ${accountIcon}"></i>${accountLabel}</a>
-      ${p ? `<a data-nav href="#/notifications"><i class="fa-regular fa-bell"></i>الإشعارات</a>` : `<a data-nav href="#/about"><i class="fa-solid fa-circle-info"></i>المدرس</a>`}
-    </div>`;
+      <div id="mobile-panel" class="mobile-panel md:hidden">
+        ${links.map(l => `<a data-nav href="${l[0]}">${l[1]}</a>`).join('')}
+        ${!p ? `<a href="#/login">تسجيل الدخول</a><a href="#/signup" class="bg-white text-blue-700 text-center mt-1">إنشاء حساب</a>` : ''}
+      </div>
+    </nav>`;
 
   const markActive = () => {
     const cur = (location.hash || '#/home').split('?')[0];
-    h.querySelectorAll('[data-nav]').forEach(a => {
-      const t = a.getAttribute('href');
-      a.classList.toggle('active', cur === t || (t.length > 7 && cur.startsWith(t)) || (t === '#/home' && cur === '#/'));
-    });
+    h.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('active', a.getAttribute('href') === cur));
+    h.querySelector('#mobile-panel')?.classList.remove('open');
+    h.querySelector('#user-drop')?.classList.remove('open');
   };
   markActive();
   if (!window.__navWatch) { window.__navWatch = true; window.addEventListener('hashchange', () => window.__markActive && window.__markActive()); }
   window.__markActive = markActive;
 
+  h.querySelector('#burger').onclick = () => h.querySelector('#mobile-panel').classList.toggle('open');
+  const ub = h.querySelector('#user-btn');
+  if (ub) ub.onclick = (e) => { e.stopPropagation(); h.querySelector('#user-drop').classList.toggle('open'); };
+  if (!window.__dropClose) { window.__dropClose = true; document.addEventListener('click', () => document.querySelector('#user-drop')?.classList.remove('open')); }
   h.querySelector('#dark-toggle').onclick = () => { toggleDark(); renderHeader(); };
   const lo = h.querySelector('#logout-btn');
-  if (lo) lo.onclick = async () => { await supabase.auth.signOut(); location.hash = '#/home'; location.reload(); };
-  const walletBtn = h.querySelector('#wallet-header-btn');
-  if (walletBtn) walletBtn.onclick = () => {
+  if (lo) lo.onclick = async (e) => { e.preventDefault(); await supabase.auth.signOut(); location.hash = '#/home'; location.reload(); };
+
+  const openCharge = () => {
     const support = s.support_whatsapp || '';
     const m = modal({
       title: 'شحن المحفظة',
@@ -136,6 +140,8 @@ export async function renderHeader() {
       } catch (e) { toast(e.message, 'error'); }
     };
   };
+  const wb = h.querySelector('#wallet-header-btn'); if (wb) wb.onclick = openCharge;
+  const dc = h.querySelector('#drop-charge'); if (dc) dc.onclick = (e) => { e.preventDefault(); openCharge(); };
 }
 
 export async function renderFooter() {
@@ -143,29 +149,34 @@ export async function renderFooter() {
   if (!f) return;
   const { data: s } = await supabase.from('settings').select('*').eq('id', 1).single();
   const socials = [
-    ['facebook', 'fa-facebook-f', s?.facebook_url, s?.show_facebook], ['whatsapp', 'fa-whatsapp', s?.whatsapp_url, s?.show_whatsapp],
-    ['telegram', 'fa-telegram', s?.telegram_url, s?.show_telegram], ['instagram', 'fa-instagram', s?.instagram_url, s?.show_instagram],
-    ['tiktok', 'fa-tiktok', s?.tiktok_url, s?.show_tiktok]
-  ].filter(x => x[3] && x[2]);
+    ['fa-facebook-f', s?.facebook_url, s?.show_facebook], ['fa-whatsapp', s?.whatsapp_url, s?.show_whatsapp],
+    ['fa-telegram', s?.telegram_url, s?.show_telegram], ['fa-instagram', s?.instagram_url, s?.show_instagram],
+    ['fa-tiktok', s?.tiktok_url, s?.show_tiktok]
+  ].filter(x => x[2] && x[1]);
   const name = s?.teacher_name || s?.platform_name || 'منصة التعليم';
-  f.className = 'max-w-7xl mx-auto px-3 pb-6';
   f.innerHTML = `
-    <div class="glass-card p-6 md:p-8">
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-        <div>
-          <p class="font-black text-xl text-main mb-1">${name}</p>
-          <p class="text-sm text-muted">${s?.teacher_title || 'شرح وامتحانات ومتابعة في مكان واحد'}</p>
-          <div class="flex flex-wrap gap-4 mt-3 text-sm text-muted">
-            ${s?.contact_phone ? `<a href="tel:${s.contact_phone}" dir="ltr" class="hover:text-blue-500"><i class="fa-solid fa-phone text-blue-500 ml-1"></i>${s.contact_phone}</a>` : ''}
-            ${s?.contact_email ? `<a href="mailto:${s.contact_email}" class="hover:text-blue-500"><i class="fa-solid fa-envelope text-blue-500 ml-1"></i>${s.contact_email}</a>` : ''}
-          </div>
+    <div class="max-w-7xl mx-auto px-6 py-12 grid gap-10 md:grid-cols-3">
+      <div>
+        <p class="font-head text-2xl text-white mb-3">${name}</p>
+        <p class="text-sm leading-7 text-gray-300">${s?.teacher_title || 'شرح مبسّط، مراجعات، وامتحانات في مكان واحد.'}</p>
+        <div class="flex gap-2 mt-5">${socials.map(x => `<a href="${x[1]}" target="_blank" class="soc"><i class="fa-brands ${x[0]}"></i></a>`).join('')}</div>
+      </div>
+      <div>
+        <p class="font-bold text-white mb-3">روابط سريعة</p>
+        <div class="flex flex-col gap-2 text-sm"><a href="#/home">الرئيسية</a><a href="#/courses">الكورسات</a><a href="#/about">عن المدرسة</a><a href="#/contact">تواصل معنا</a></div>
+      </div>
+      <div>
+        <p class="font-bold text-white mb-3">تواصل</p>
+        <div class="flex flex-col gap-2 text-sm text-gray-300">
+          ${s?.contact_phone ? `<a href="tel:${s.contact_phone}" dir="ltr" class="text-right"><i class="fa-solid fa-phone ml-2 text-sky-400"></i>${s.contact_phone}</a>` : ''}
+          ${s?.contact_email ? `<a href="mailto:${s.contact_email}"><i class="fa-solid fa-envelope ml-2 text-sky-400"></i>${s.contact_email}</a>` : ''}
+          ${s?.contact_address ? `<span><i class="fa-solid fa-location-dot ml-2 text-sky-400"></i>${s.contact_address}</span>` : ''}
         </div>
-        <div class="flex gap-2">${socials.map(x => `<a href="${x[2]}" target="_blank" class="icon-btn"><i class="fa-brands ${x[1]}"></i></a>`).join('')}</div>
       </div>
-      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border mt-6 pt-4 text-xs text-muted">
-        <p>&copy; ${new Date().getFullYear()} ${name}. جميع الحقوق محفوظة.</p>
-        <div class="flex gap-4"><a href="#/policy/terms" class="hover:text-blue-500">الشروط</a><a href="#/policy/privacy" class="hover:text-blue-500">الخصوصية</a><a href="#/policy/refund" class="hover:text-blue-500">الاسترجاع</a></div>
-      </div>
+    </div>
+    <div class="border-t border-white/10 py-4 px-6 text-xs text-gray-400 flex flex-wrap items-center justify-between gap-3 max-w-7xl mx-auto">
+      <p>&copy; ${new Date().getFullYear()} ${name}. جميع الحقوق محفوظة.</p>
+      <div class="flex gap-4"><a href="#/policy/terms">الشروط</a><a href="#/policy/privacy">الخصوصية</a><a href="#/policy/refund">الاسترجاع</a></div>
     </div>`;
 }
 

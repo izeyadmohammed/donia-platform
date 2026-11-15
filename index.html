@@ -2,13 +2,12 @@
 <html lang="ar" dir="rtl" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
-  <meta name="google-site-verification" content="p-2ud18BU5svk6MeaxS8JHzjZuw15GxWc_6JCVYz7IE" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title id="page-title">منصة التعليم الذكي</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -17,12 +16,12 @@
   <script>
     tailwind.config = {
       darkMode: 'class',
-      theme: { extend: { fontFamily: { sans: ['IBM Plex Sans Arabic', 'sans-serif'] } } }
+      theme: { extend: { fontFamily: { sans: ['Almarai', 'IBM Plex Sans Arabic', 'sans-serif'] }, colors: { dodger: { 50:'#ecfbff',100:'#d4f5ff',200:'#b2efff',400:'#41d6ff',500:'#16b9ff',600:'#009aff',700:'#0081fd',800:'#0171dd',900:'#085aa0' } } } }
     }
   </script>
   <script type="module" src="js/init.js"></script>
 <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2563EB">
+  <meta name="theme-color" content="#0171DD">
 </head>
 <body class="antialiased selection:bg-blue-500/30">
   <!-- شريط تثبيت التطبيق -->
@@ -37,9 +36,9 @@
     </div>
   </div>
 
-  <header id="app-header" class="sticky top-0 z-[800]"></header>
-  <main id="app-main" class="flex-1 container mx-auto px-4 pt-6 pb-10 max-w-7xl"></main>
-  <footer id="app-footer"></footer>
+  <header id="app-header"></header>
+  <main id="app-main" class="flex-1 container mx-auto px-4 pb-10 max-w-7xl"></main>
+  <footer id="app-footer" class="site-footer"></footer>
   
   <div id="toast-container" class="fixed top-6 left-6 z-[9999] space-y-3"></div>
   <div id="modal-root"></div>
