@@ -23,10 +23,10 @@ function renderLogin(el) {
     try {
       await login(fd.get('phone').trim(), fd.get('password'));
       toast('تم الدخول بنجاح', 'success');
-      
+
       const { loadProfile, roleHomePath } = await import('../auth.js');
       const profile = await loadProfile();
-      
+
       if (profile) {
         window.location.href = window.location.origin + roleHomePath(profile.role);
       } else {
@@ -60,9 +60,6 @@ function renderSignup(el) {
       </select>
       <input name="password" required type="password" minlength="8" placeholder="كلمة المرور (8 خانات على الأقل)" class="input-field" dir="ltr">
 
-      <!-- كابتشا مرئية في التسجيل بس -->
-      <div id="turnstile-widget" class="cf-turnstile" data-sitekey="0x4AAAAAAFotshjiLBUI1DY8" data-theme="light" style="margin: 10px 0;"></div>
-
       <div class="flex items-start gap-2 mt-4">
         <input type="checkbox" id="terms-checkbox" required class="mt-1 w-4 h-4 accent-blue-500">
         <label for="terms-checkbox" class="text-sm text-muted leading-tight">
@@ -81,21 +78,12 @@ function renderSignup(el) {
       <a href="#/login" class="block text-center text-sm text-blue-500 hover:underline mt-3">لدي حساب بالفعل</a>
     </form></div>`;
 
-  if (!document.getElementById('cf-turnstile-script')) {
-    const script = document.createElement('script');
-    script.id = 'cf-turnstile-script';
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-  }
-
   const form = el.querySelector('#signup-form');
   const verifyBox = el.querySelector('#verify-code-box');
   const verifyInput = el.querySelector('#verify-code-input');
   const signupBtn = el.querySelector('#signup-btn');
   const termsCheckbox = el.querySelector('#terms-checkbox');
-  
+
   let userIP = '';
   let needsVerification = false;
   let ipCheckDone = false;
@@ -163,12 +151,6 @@ function renderSignup(el) {
       return;
     }
 
-    const turnstileResponse = form.querySelector('[name="cf-turnstile-response"]');
-    if (!turnstileResponse || !turnstileResponse.value) {
-      toast('من فضلك أكمل التحقق (أنا لست روبوت)', 'error');
-      return;
-    }
-
     const name1 = form.querySelector('[name="name1"]').value.trim();
     const name2 = form.querySelector('[name="name2"]').value.trim();
     const name3 = form.querySelector('[name="name3"]').value.trim();
@@ -199,7 +181,7 @@ function renderSignup(el) {
       const { data, error } = await supabase.auth.signUp({
         email: `${phone.replace(/\s/g, '')}@edu.local`,
         password: password,
-        options: { 
+        options: {
           data: { name: name, phone: phone, parent_phone: parentPhone, grade: grade, role: 'student' }
         }
       });
