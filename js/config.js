@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export const SUPABASE_URL = 'https://pephaughlgezamtzphkt.supabase.co';
-export const SUPABASE_KEY = 'sb_publishable_UzP993xPgfG_cdLb-Lzw8g_byTBa6HF';
+export const SUPABASE_URL = 'https://vhmtjifakxxwgmspavab.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_mjO4OYOiIHdlTV9fa2Epgw_4omzNenv';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
