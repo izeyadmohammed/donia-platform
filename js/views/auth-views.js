@@ -1,20 +1,22 @@
-import { login, signup, roleHomePath, loadProfile } from '../auth.js';
-import { toast, modal } from '../ui.js';
-import { supabase } from '../config.js';
+import { login, roleHomePath, loadProfile } from '../auth.js';
+import { toast, modal, renderHeader } from '../ui.js';
+import { supabase, store, loadAllData } from '../config.js';
+import { whatsappUrl, isValidPersonName, isValidEgyptPhone, isValidPassword } from '../utils.js';
 
 export default async function authView(el) {
   const isSignup = location.hash === '#/signup';
-  if (isSignup) renderSignup(el); else renderLogin(el);
+  if (isSignup) renderSignup(el);
+  else renderLogin(el);
 }
 
 function renderLogin(el) {
   el.innerHTML = `<div class="glass-card max-w-md mx-auto p-8 mt-10 animate-fade-up">
     <h2 class="text-2xl font-extrabold mb-6 text-center text-main">تسجيل الدخول</h2>
     <form id="login-form" class="space-y-4">
-      <div><label class="block text-sm font-bold mb-1 text-muted">رقم الهاتف</label><input name="phone" required type="tel" placeholder="01xxxxxxxxx" class="input-field" dir="ltr"></div>
-      <div><label class="block text-sm font-bold mb-1 text-muted">كلمة المرور</label><input name="password" required type="password" class="input-field" dir="ltr"></div>
-      <button class="btn-primary w-full py-3">دخول</button>
-      <div class="flex justify-between text-sm mt-4"><a href="#/signup" class="text-blue-500 hover:underline">حساب جديد</a><a href="#" id="forgot" class="text-red-500 hover:underline">نسيت كلمة المرور؟</a></div>
+      <div><label class="block text-sm font-bold mb-1 text-muted" for="login-phone">رقم الهاتف</label><input id="login-phone" name="phone" required type="tel" placeholder="01xxxxxxxxx" class="input-field" dir="ltr"></div>
+      <div><label class="block text-sm font-bold mb-1 text-muted" for="login-pass">كلمة المرور</label><input id="login-pass" name="password" required type="password" class="input-field" dir="ltr"></div>
+      <button type="submit" class="btn-primary w-full py-3">دخول</button>
+      <div class="flex justify-between text-sm mt-4"><a href="#/signup" class="text-primary font-bold hover:underline">حساب جديد</a><a href="#" id="forgot" class="text-red-500 font-bold hover:underline">نسيت كلمة المرور؟</a></div>
     </form></div>`;
 
   el.querySelector('#login-form').onsubmit = async (e) => {
@@ -24,58 +26,80 @@ function renderLogin(el) {
       await login(fd.get('phone').trim(), fd.get('password'));
       toast('تم الدخول بنجاح', 'success');
 
-      const { loadProfile, roleHomePath } = await import('../auth.js');
       const profile = await loadProfile();
+      await loadAllData();
+      await renderHeader();
 
       if (profile) {
-        window.location.href = window.location.origin + roleHomePath(profile.role);
+        location.hash = roleHomePath(profile.role);
       } else {
-        window.location.hash = '#/home';
+        location.hash = '#/home';
       }
-    } catch (err) { toast(err.message, 'error'); }
+    } catch (err) {
+      toast(err.message, 'error');
+    }
   };
 
   el.querySelector('#forgot').onclick = (e) => {
     e.preventDefault();
-    modal({ title: 'استعادة كلمة المرور', body: `<p class="mb-3">تواصل مع الدعم عبر واتساب:</p><a target="_blank" href="https://wa.me/201126346329" class="block text-center py-3 bg-green-500/20 text-green-500 rounded-lg font-bold border border-green-500/30"><i class="fa-brands fa-whatsapp"></i> فتح واتساب</a>` });
+    const waHref = whatsappUrl(store.settings?.support_whatsapp || '201126346329');
+    modal({
+      title: 'استعادة كلمة المرور',
+      body: `<p class="mb-3 text-main">تواصل مع الدعم عبر واتساب:</p><a target="_blank" rel="noopener" href="${waHref}" class="block text-center py-3 bg-green-500/15 text-green-600 dark:text-green-400 rounded-lg font-bold border border-green-500/30"><i class="fa-brands fa-whatsapp"></i> فتح واتساب</a>`
+    });
   };
 }
 
 function renderSignup(el) {
-  const grades = ['الأول الابتدائي', 'الثاني الابتدائي', 'الثالث الابتدائي', 'الرابع الابتدائي', 'الخامس الابتدائي', 'السادس الابتدائي', 'الأول الإعدادي', 'الثاني الإعدادي', 'الثالث الإعدادي', 'الأول الثانوي', 'الثاني الثانوي', 'الثالث الثانوي'];
+  const grades = [
+    'الأول الابتدائي',
+    'الثاني الابتدائي',
+    'الثالث الابتدائي',
+    'الرابع الابتدائي',
+    'الخامس الابتدائي',
+    'السادس الابتدائي',
+    'الأول الإعدادي',
+    'الثاني الإعدادي',
+    'الثالث الإعدادي',
+    'الأول الثانوي',
+    'الثاني الثانوي',
+    'الثالث الثانوي'
+  ];
+  const waHref = whatsappUrl(store.settings?.support_whatsapp || '201126346329');
+
   el.innerHTML = `<div class="glass-card max-w-md mx-auto p-8 mt-10 animate-fade-up">
     <h2 class="text-2xl font-extrabold mb-6 text-center text-main">إنشاء حساب جديد</h2>
     <form id="signup-form" class="space-y-3" novalidate>
       <div class="grid grid-cols-3 gap-2">
-        <input name="name1" required placeholder="الاسم الأول" class="input-field text-sm">
-        <input name="name2" required placeholder="اسم الأب" class="input-field text-sm">
-        <input name="name3" required placeholder="الاسم الأخير" class="input-field text-sm">
+        <input name="name1" required placeholder="الاسم الأول" aria-label="الاسم الأول" class="input-field text-sm">
+        <input name="name2" required placeholder="اسم الأب" aria-label="اسم الأب" class="input-field text-sm">
+        <input name="name3" required placeholder="الاسم الأخير" aria-label="الاسم الأخير" class="input-field text-sm">
       </div>
 
-      <input name="phone" required type="tel" placeholder="رقم الهاتف (11 رقم)" class="input-field" dir="ltr" maxlength="11">
-      <input name="parent_phone" required type="tel" placeholder="رقم ولي الأمر (11 رقم)" class="input-field" dir="ltr" maxlength="11">
-      <select name="grade" required class="input-field">
+      <input name="phone" required type="tel" placeholder="رقم الهاتف (11 رقم)" aria-label="رقم الهاتف" class="input-field" dir="ltr" maxlength="11">
+      <input name="parent_phone" required type="tel" placeholder="رقم ولي الأمر (11 رقم)" aria-label="رقم ولي الأمر" class="input-field" dir="ltr" maxlength="11">
+      <select name="grade" required aria-label="اختر الصف" class="input-field">
         <option value="">اختر الصف</option>
-        ${grades.map(g => `<option value="${g}">${g}</option>`).join('')}
+        ${grades.map((g) => `<option value="${g}">${g}</option>`).join('')}
       </select>
-      <input name="password" required type="password" minlength="8" placeholder="كلمة المرور (8 خانات على الأقل)" class="input-field" dir="ltr">
+      <input name="password" required type="password" minlength="8" placeholder="كلمة المرور (8 خانات على الأقل)" aria-label="كلمة المرور" class="input-field" dir="ltr">
 
       <div class="flex items-start gap-2 mt-4">
-        <input type="checkbox" id="terms-checkbox" required class="mt-1 w-4 h-4 accent-blue-500">
+        <input type="checkbox" id="terms-checkbox" required class="mt-1 w-4 h-4 accent-blue-600">
         <label for="terms-checkbox" class="text-sm text-muted leading-tight">
-          أوافق على <a href="#/policy/terms" target="_blank" class="text-blue-500 hover:underline">شروط الاستخدام</a> و <a href="#/policy/privacy" target="_blank" class="text-blue-500 hover:underline">سياسة الخصوصية</a>
+          أوافق على <a href="#/policy/terms" target="_blank" class="text-primary hover:underline">شروط الاستخدام</a> و <a href="#/policy/privacy" target="_blank" class="text-primary hover:underline">سياسة الخصوصية</a>
         </label>
       </div>
 
       <div id="verify-code-box" class="hidden space-y-2 bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
-        <p class="text-sm text-blue-400 font-bold">لقد قمت بإنشاء حساب من هذا الجهاز سابقاً.</p>
+        <p class="text-sm text-primary font-bold">لقد قمت بإنشاء حساب من هذا الجهاز سابقاً.</p>
         <p class="text-xs text-muted">يرجى التواصل مع الدعم للحصول على كود التحقق.</p>
         <input name="verify_code" id="verify-code-input" placeholder="أدخل كود التحقق" class="input-field text-center font-mono">
-        <a target="_blank" href="https://wa.me/201126346329" class="block text-center text-sm text-green-500 hover:underline">تواصل مع الدعم</a>
+        <a target="_blank" rel="noopener" href="${waHref}" class="block text-center text-sm text-green-600 dark:text-green-400 hover:underline">تواصل مع الدعم</a>
       </div>
 
       <button type="submit" class="btn-primary w-full py-3 mt-2 opacity-50 cursor-not-allowed" id="signup-btn" disabled>جاري التحقق من الجهاز...</button>
-      <a href="#/login" class="block text-center text-sm text-blue-500 hover:underline mt-3">لدي حساب بالفعل</a>
+      <a href="#/login" class="block text-center text-sm text-primary font-bold hover:underline mt-3">لدي حساب بالفعل</a>
     </form></div>`;
 
   const form = el.querySelector('#signup-form');
@@ -88,14 +112,8 @@ function renderSignup(el) {
   let needsVerification = false;
   let ipCheckDone = false;
 
-  function isValidName(name) {
-    const arabicRegex = /^[\u0600-\u06FF\s]+$/;
-    const englishRegex = /^[a-zA-Z\s]+$/;
-    return arabicRegex.test(name) || englishRegex.test(name);
-  }
-
   fetch('https://api.ipify.org?format=json')
-    .then(res => res.json())
+    .then((res) => res.json())
     .then(async (data) => {
       userIP = data.ip;
       const { data: count } = await supabase.rpc('check_ip_accounts', { ip_input: userIP });
@@ -120,24 +138,6 @@ function renderSignup(el) {
       signupBtn.textContent = 'تسجيل';
     });
 
-  function isValidPhone(phone) {
-    const cleanPhone = phone.trim();
-    return /^(010|011|012|015)[0-9]{8}$/.test(cleanPhone);
-  }
-
-  function isValidPassword(pass) {
-    if (pass.length < 8) return false;
-    for (let i = 0; i < pass.length; i++) {
-      const c = pass.charCodeAt(i);
-      const isDigit = c >= 48 && c <= 57;
-      const isUpper = c >= 65 && c <= 90;
-      const isLower = c >= 97 && c <= 122;
-      const isSymbol = [33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,58,59,60,61,62,63,64,91,92,93,94,95,96,123,124,125,126].includes(c);
-      if (!isDigit && !isUpper && !isLower && !isSymbol) return false;
-    }
-    return true;
-  }
-
   form.onsubmit = async (e) => {
     e.preventDefault();
 
@@ -161,28 +161,55 @@ function renderSignup(el) {
     const password = form.querySelector('[name="password"]').value;
     const verifyCode = verifyInput?.value.trim() || '';
 
-    if (!name1 || !name2 || !name3) { toast('يجب كتابة الاسم الأول واسم الأب والاسم الأخير', 'error'); return; }
-    if (!isValidName(name1) || !isValidName(name2) || !isValidName(name3)) { toast('الاسم يجب أن يحتوي على حروف فقط (عربية أو إنجليزية)', 'error'); return; }
-    if (!phone || !parentPhone || !grade || !password) { toast('يجب ملء جميع الخانات', 'error'); return; }
-    if (!isValidPhone(phone)) { toast('رقم الهاتف يجب أن يبدأ بـ 010, 011, 012, 015 ويكون 11 رقم', 'error'); return; }
-    if (!isValidPhone(parentPhone)) { toast('رقم ولي الأمر يجب أن يبدأ بـ 010, 011, 012, 015 ويكون 11 رقم', 'error'); return; }
-    if (phone === parentPhone) { toast('رقم ولي الأمر يجب أن يكون مختلفاً عن رقم الطالب', 'error'); return; }
-    if (!isValidPassword(password)) { toast('كلمة المرور يجب أن تكون 8 خانات على الأقل وتتكون من أرقام وحروف إنجليزي أو رموز فقط', 'error'); return; }
+    if (!name1 || !name2 || !name3) {
+      toast('يجب كتابة الاسم الأول واسم الأب والاسم الأخير', 'error');
+      return;
+    }
+    if (!isValidPersonName(name1) || !isValidPersonName(name2) || !isValidPersonName(name3)) {
+      toast('الاسم يجب أن يحتوي على حروف فقط (عربية أو إنجليزية)', 'error');
+      return;
+    }
+    if (!phone || !parentPhone || !grade || !password) {
+      toast('يجب ملء جميع الخانات', 'error');
+      return;
+    }
+    if (!isValidEgyptPhone(phone)) {
+      toast('رقم الهاتف يجب أن يبدأ بـ 010, 011, 012, 015 ويكون 11 رقم', 'error');
+      return;
+    }
+    if (!isValidEgyptPhone(parentPhone)) {
+      toast('رقم ولي الأمر يجب أن يبدأ بـ 010, 011, 012, 015 ويكون 11 رقم', 'error');
+      return;
+    }
+    if (phone === parentPhone) {
+      toast('رقم ولي الأمر يجب أن يكون مختلفاً عن رقم الطالب', 'error');
+      return;
+    }
+    if (!isValidPassword(password)) {
+      toast('كلمة المرور يجب أن تكون 8 خانات على الأقل وتتكون من أرقام وحروف إنجليزي أو رموز فقط', 'error');
+      return;
+    }
 
     if (needsVerification) {
-      if (!verifyCode) { toast('يجب إدخال كود التحقق (تواصل مع الدعم)', 'error'); return; }
+      if (!verifyCode) {
+        toast('يجب إدخال كود التحقق (تواصل مع الدعم)', 'error');
+        return;
+      }
       try {
         const { error } = await supabase.rpc('verify_signup_code', { code_input: verifyCode });
         if (error) throw new Error(error.message || 'كود التحقق غير صحيح');
-      } catch (err) { toast(err.message, 'error'); return; }
+      } catch (err) {
+        toast(err.message, 'error');
+        return;
+      }
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: `${phone.replace(/\s/g, '')}@edu.local`,
-        password: password,
+        password,
         options: {
-          data: { name: name, phone: phone, parent_phone: parentPhone, grade: grade, role: 'student' }
+          data: { name, phone, parent_phone: parentPhone, grade, role: 'student' }
         }
       });
 
@@ -190,7 +217,7 @@ function renderSignup(el) {
 
       const { error: loginError } = await supabase.auth.signInWithPassword({
         email: `${phone.replace(/\s/g, '')}@edu.local`,
-        password: password
+        password
       });
 
       if (loginError) throw new Error('تم إنشاء الحساب بس تعذر تسجيل الدخول: ' + loginError.message);
@@ -199,18 +226,16 @@ function renderSignup(el) {
         await supabase.rpc('increment_ip_accounts', { ip_input: userIP });
       }
 
-      await new Promise(resolve => setTimeout(resolve, 800));
-      const profile = await loadProfile();
+      const profile = await loadProfile(400);
+      await loadAllData();
+      await renderHeader();
 
       if (profile) {
         toast('تم التسجيل بنجاح!', 'success');
-        setTimeout(() => {
-          window.location.href = window.location.origin + '#/student';
-          window.location.reload();
-        }, 1000);
+        location.hash = '#/student';
       } else {
         toast('حدث خطأ، يرجى تسجيل الدخول', 'warn');
-        setTimeout(() => { location.hash = '#/login'; }, 1500);
+        location.hash = '#/login';
       }
     } catch (err) {
       toast(err.message, 'error');

@@ -1,21 +1,27 @@
 import { store } from '../config.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, resolveBrandInfo } from '../utils.js';
 
 export default async function aboutView(el) {
   const s = store.settings || {};
-  const name = s.teacher_name || s.platform_name || 'المدرس';
+  const brand = resolveBrandInfo(s);
+
   el.innerHTML = `
-    <div class="glass-card max-w-3xl mx-auto p-8 md:p-12 animate-fade-up mt-2 text-center">
-      <div class="w-40 h-40 mx-auto mb-6 rounded-full overflow-hidden border-4 border-blue-500/40 bg-gradient-to-br from-blue-600 to-sky-700 flex items-center justify-center">
-        ${s.teacher_image ? `<img src="${escapeHtml(s.teacher_image)}" class="w-full h-full object-cover object-top">` : '<i class="fa-solid fa-chalkboard-user text-6xl text-white/80"></i>'}
+    <div class="glass-card max-w-3xl mx-auto p-8 md:p-12 animate-fade-up mt-4 text-center">
+      ${brand.hasDistinctPlatform ? `<p class="text-xs font-bold text-primary mb-4">منصة ${escapeHtml(brand.platformName)} التعليمية</p>` : ''}
+      <div class="w-40 h-40 mx-auto mb-6 rounded-2xl overflow-hidden border-2 border-blue-500/30 bg-gradient-to-br from-blue-600 to-sky-700 flex items-center justify-center shadow-lg">
+        ${
+          s.teacher_image
+            ? `<img src="${escapeHtml(s.teacher_image)}" alt="${escapeHtml(brand.teacherName)}" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML='<i class=&quot;fa-solid fa-chalkboard-user text-6xl text-white/80&quot;></i>'" class="w-full h-full object-cover object-top">`
+            : '<i class="fa-solid fa-chalkboard-user text-6xl text-white/80"></i>'
+        }
       </div>
-      <h1 class="text-3xl md:text-4xl font-black text-main mb-2">${escapeHtml(name)}</h1>
-      <p class="text-blue-500 font-bold mb-6">${escapeHtml(s.teacher_title || 'مدرسة العلوم')}</p>
+      <h1 class="text-3xl md:text-4xl font-black text-main mb-2">${escapeHtml(brand.teacherName)}</h1>
+      <p class="text-primary font-bold mb-6">${escapeHtml(brand.teacherTitle)}</p>
       <div class="w-20 h-1 bg-primary mx-auto rounded-full mb-8"></div>
-      <p class="text-lg text-muted leading-relaxed whitespace-pre-wrap">${escapeHtml(s.teacher_bio || 'أهلاً بيكم في منصتي لشرح العلوم. هتلاقوا الشرح المبسط والتجارب والمراجعات والامتحانات في مكان واحد.')}</p>
+      <p class="text-lg text-muted leading-relaxed whitespace-pre-wrap">${escapeHtml(brand.heroSubtitle || 'أهلاً بكم في منصتي التعليمية. شرح مبسّط وتجارب ومراجعات وامتحانات تفاعلية في مكان واحد.')}</p>
       <div class="flex flex-wrap gap-3 justify-center mt-8">
         <a href="#/courses" class="btn-primary px-8">تصفح الكورسات</a>
-        <a href="#/contact" class="btn-accent px-8">تواصل معي</a>
+        <a href="#/contact" class="btn-accent px-8">تواصل معنا</a>
       </div>
     </div>`;
 }

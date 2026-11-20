@@ -1,6 +1,6 @@
-import { supabase, store } from '../config.js';
+import { supabase, store, SUPABASE_URL } from '../config.js';
 import { escapeHtml, formatMoney, formatDate, uid } from '../utils.js';
-import { toast, modal } from '../ui.js';
+import { toast, modal, confirmModal } from '../ui.js';
 
 export default async function adminView(el) {
   if (!store.profile || (store.profile.role !== 'super_admin' && store.profile.role !== 'admin')) {
@@ -50,7 +50,15 @@ async function renderDashboard(el) {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-up">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-fade-up">
+      <a href="#/teacher/courses" class="glass-card p-6 text-center hover:bg-black/5 dark:hover:bg-white/5 transition">
+        <i class="fa-solid fa-book-open text-4xl text-blue-600 mb-3"></i>
+        <h3 class="font-bold text-lg text-main">إدارة الكورسات</h3>
+      </a>
+      <a href="#/teacher/grading" class="glass-card p-6 text-center hover:bg-black/5 dark:hover:bg-white/5 transition">
+        <i class="fa-solid fa-file-signature text-4xl text-emerald-500 mb-3"></i>
+        <h3 class="font-bold text-lg text-main">تصحيح الواجبات</h3>
+      </a>
       <a href="#/admin/students" class="glass-card p-6 text-center hover:bg-black/5 dark:hover:bg-white/5 transition">
         <i class="fa-solid fa-users text-4xl text-blue-500 mb-3"></i>
         <h3 class="font-bold text-lg text-main">الطلاب</h3>
@@ -212,7 +220,7 @@ async function renderStudents(el) {
           if (error) throw new Error(error.message);
           if (newPass.length >= 8) {
             const { data: { session } } = await supabase.auth.getSession();
-            const res = await fetch(`https://pephaughlgezamtzphkt.supabase.co/functions/v1/admin_update_user`, {
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/admin_update_user`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
               body: JSON.stringify({ user_id: id, new_password: newPass })
@@ -255,7 +263,13 @@ async function renderStudents(el) {
   // زرار الحذف
   el.querySelectorAll('[data-delu]').forEach(b => {
     b.onclick = async () => {
-      if (!confirm('حذف الطالب نهائياً؟')) return;
+      const ok = await confirmModal({
+        title: 'حذف الطالب',
+        message: 'هل تريد حذف حساب هذا الطالب نهائياً؟',
+        confirmText: 'حذف نهائي',
+        danger: true
+      });
+      if (!ok) return;
       await supabase.from('profiles').delete().eq('id', b.dataset.delu);
       toast('تم', 'success'); location.reload();
     };
@@ -312,7 +326,13 @@ async function renderTeachers(el) {
   });
   el.querySelectorAll('[data-del-teacher]').forEach(b => {
     b.onclick = async () => {
-      if (!confirm('حذف المدرس؟')) return;
+      const ok = await confirmModal({
+        title: 'حذف المدرس',
+        message: 'هل أنت متأكد من حذف هذا المدرس؟',
+        confirmText: 'حذف',
+        danger: true
+      });
+      if (!ok) return;
       await supabase.from('profiles').delete().eq('id', b.dataset.delTeacher);
       toast('تم', 'success'); location.reload();
     };
@@ -324,39 +344,85 @@ async function renderTeachers(el) {
 // ==========================================
 async function renderCodes(el) {
   const { data: codes } = await supabase.from('codes').select('*').order('created_at', { ascending: false });
+  const list = codes || [];
+  let filter = 'all';
+
   el.innerHTML = `
-    <div class="flex items-center justify-between mb-6 animate-fade-up">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6 animate-fade-up">
       <h1 class="text-3xl font-black text-main">أكواد <span class="text-sky-500">الشحن</span></h1>
-      <div class="flex gap-2">
-        <button id="gen-codes" class="btn-primary text-sm px-4 py-2"><i class="fa-solid fa-plus mr-1"></i> توليد</button>
-        <a href="#/admin" class="text-sm font-bold text-muted hover:text-primary mt-2"><i class="fa-solid fa-arrow-right"></i> رجوع</a>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="copy-unused-codes" type="button" class="btn-outline text-sm px-4 py-2"><i class="fa-solid fa-copy mr-1"></i> نسخ المتاح</button>
+        <button id="gen-codes" type="button" class="btn-primary text-sm px-4 py-2"><i class="fa-solid fa-plus mr-1"></i> توليد</button>
+        <a href="#/admin" class="text-sm font-bold text-muted hover:text-primary px-2"><i class="fa-solid fa-arrow-right"></i> رجوع</a>
       </div>
+    </div>
+    <div class="flex gap-2 mb-4 animate-fade-up" role="group" aria-label="تصفية الأكواد">
+      <button type="button" class="chip active" data-cfilter="all">الكل (${list.length})</button>
+      <button type="button" class="chip" data-cfilter="unused">متاح (${list.filter(c => !c.used).length})</button>
+      <button type="button" class="chip" data-cfilter="used">مستخدم (${list.filter(c => c.used).length})</button>
     </div>
     <div class="glass-card p-6 animate-fade-up">
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        ${(codes || []).map(c => `
-          <div class="p-3 rounded-lg bg-black/5 dark:bg-white/5 border border-border flex justify-between items-center">
-            <div>
-              <p class="font-mono text-sm text-main font-bold">${escapeHtml(c.code)}</p>
-              <p class="text-xs ${c.used ? 'text-red-500' : 'text-green-500'}">${c.used ? 'مستخدم' : 'متاح'}</p>
-            </div>
-            <div class="text-left">
-              <p class="font-bold text-green-500">${formatMoney(c.amount)}</p>
-              <button data-del-code="${c.id}" class="text-red-500 text-xs mt-1 hover:underline">حذف</button>
-            </div>
-          </div>
-        `).join('') || '<p class="text-muted col-span-3 text-center">لا توجد أكواد</p>'}
-      </div>
+      <div id="codes-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
     </div>
   `;
-  el.querySelector('#gen-codes').onclick = () => openGenCodesModal();
-  el.querySelectorAll('[data-del-code]').forEach(b => {
-    b.onclick = async () => {
-      if (!confirm('حذف الكود؟')) return;
-      await supabase.from('codes').delete().eq('id', b.dataset.delCode);
-      toast('تم', 'success'); location.reload();
+
+  const grid = el.querySelector('#codes-grid');
+  const drawCodes = () => {
+    const filtered = list.filter(c => (filter === 'unused' ? !c.used : filter === 'used' ? c.used : true));
+    grid.innerHTML = filtered.map(c => `
+      <div class="p-3 rounded-lg bg-black/5 dark:bg-white/5 border border-border flex justify-between items-center gap-2">
+        <div>
+          <p class="font-mono text-sm text-main font-bold" dir="ltr">${escapeHtml(c.code)}</p>
+          <p class="text-xs font-bold ${c.used ? 'text-red-500' : 'text-green-600 dark:text-green-400'}">${c.used ? 'مستخدم' : 'متاح'}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="text-left">
+            <p class="font-bold text-green-600 dark:text-green-400 tabular-nums">${formatMoney(c.amount)}</p>
+            <button type="button" data-del-code="${c.id}" class="text-red-500 text-xs mt-1 hover:underline">حذف</button>
+          </div>
+          <button type="button" data-copy-charge="${escapeHtml(c.code)}" aria-label="نسخ الكود" class="w-8 h-8 rounded bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 flex items-center justify-center"><i class="fa-solid fa-copy text-xs"></i></button>
+        </div>
+      </div>
+    `).join('') || '<p class="text-muted col-span-3 text-center py-6">لا توجد أكواد مطابقة</p>';
+
+    grid.querySelectorAll('[data-copy-charge]').forEach(b => {
+      b.onclick = () => {
+        navigator.clipboard?.writeText(b.dataset.copyCharge);
+        toast('تم نسخ الكود', 'success');
+      };
+    });
+    grid.querySelectorAll('[data-del-code]').forEach(b => {
+      b.onclick = async () => {
+        const ok = await confirmModal({
+          title: 'حذف الكود',
+          message: 'هل تريد حذف كود الشحن هذا نهائياً؟',
+          confirmText: 'حذف',
+          danger: true
+        });
+        if (!ok) return;
+        await supabase.from('codes').delete().eq('id', b.dataset.delCode);
+        toast('تم', 'success'); location.reload();
+      };
+    });
+  };
+  drawCodes();
+
+  el.querySelectorAll('[data-cfilter]').forEach(btn => {
+    btn.onclick = () => {
+      filter = btn.dataset.cfilter;
+      el.querySelectorAll('[data-cfilter]').forEach(x => x.classList.toggle('active', x.dataset.cfilter === filter));
+      drawCodes();
     };
   });
+
+  el.querySelector('#copy-unused-codes').onclick = () => {
+    const unused = list.filter(c => !c.used).map(c => `${c.code} (${c.amount} ج.م)`).join('\n');
+    if (!unused) { toast('لا توجد أكواد متاحة للنسخ', 'warn'); return; }
+    navigator.clipboard?.writeText(unused);
+    toast('تم نسخ جميع الأكواد المتاحة', 'success');
+  };
+
+  el.querySelector('#gen-codes').onclick = () => openGenCodesModal();
 }
 
 // ==========================================
@@ -364,28 +430,65 @@ async function renderCodes(el) {
 // ==========================================
 async function renderVerifyCodes(el) {
   const { data: codes } = await supabase.from('verification_codes').select('*').order('created_at', { ascending: false });
+  const list = codes || [];
+  let filter = 'all';
+
   el.innerHTML = `
-    <div class="flex items-center justify-between mb-6 animate-fade-up">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6 animate-fade-up">
       <h1 class="text-3xl font-black text-main">أكواد <span class="text-orange-500">التحقق</span></h1>
-      <div class="flex gap-2">
-        <button id="gen-vcodes" class="btn-primary text-sm px-4 py-2"><i class="fa-solid fa-plus mr-1"></i> توليد</button>
-        <a href="#/admin" class="text-sm font-bold text-muted hover:text-primary mt-2"><i class="fa-solid fa-arrow-right"></i> رجوع</a>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="copy-unused-vcodes" type="button" class="btn-outline text-sm px-4 py-2"><i class="fa-solid fa-copy mr-1"></i> نسخ المتاح</button>
+        <button id="gen-vcodes" type="button" class="btn-primary text-sm px-4 py-2"><i class="fa-solid fa-plus mr-1"></i> توليد</button>
+        <a href="#/admin" class="text-sm font-bold text-muted hover:text-primary px-2"><i class="fa-solid fa-arrow-right"></i> رجوع</a>
       </div>
+    </div>
+    <div class="flex gap-2 mb-4 animate-fade-up" role="group" aria-label="تصفية أكواد التحقق">
+      <button type="button" class="chip active" data-vfilter="all">الكل (${list.length})</button>
+      <button type="button" class="chip" data-vfilter="unused">متاح (${list.filter(c => !c.used).length})</button>
+      <button type="button" class="chip" data-vfilter="used">مستخدم (${list.filter(c => c.used).length})</button>
     </div>
     <div class="glass-card p-6 animate-fade-up">
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        ${(codes || []).map(c => `
-          <div class="p-3 rounded-lg bg-black/5 dark:bg-white/5 border border-border flex justify-between items-center">
-            <div>
-              <p class="font-mono text-lg text-main font-bold tracking-widest">${escapeHtml(c.code)}</p>
-              <p class="text-xs ${c.used ? 'text-red-500' : 'text-green-500'}">${c.used ? 'مستخدم' : 'متاح'}</p>
-            </div>
-            <button data-copy="${c.code}" class="text-blue-500 hover:text-blue-400"><i class="fa-solid fa-copy"></i></button>
-          </div>
-        `).join('') || '<p class="text-muted col-span-3 text-center">لا توجد أكواد</p>'}
-      </div>
+      <div id="vcodes-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
     </div>
   `;
+
+  const grid = el.querySelector('#vcodes-grid');
+  const drawVCodes = () => {
+    const filtered = list.filter(c => (filter === 'unused' ? !c.used : filter === 'used' ? c.used : true));
+    grid.innerHTML = filtered.map(c => `
+      <div class="p-3 rounded-lg bg-black/5 dark:bg-white/5 border border-border flex justify-between items-center">
+        <div>
+          <p class="font-mono text-lg text-main font-bold tracking-widest" dir="ltr">${escapeHtml(c.code)}</p>
+          <p class="text-xs font-bold ${c.used ? 'text-red-500' : 'text-green-600 dark:text-green-400'}">${c.used ? 'مستخدم' : 'متاح'}</p>
+        </div>
+        <button type="button" data-copy="${escapeHtml(c.code)}" aria-label="نسخ كود التحقق" class="text-blue-500 hover:text-blue-400 p-2"><i class="fa-solid fa-copy"></i></button>
+      </div>
+    `).join('') || '<p class="text-muted col-span-3 text-center py-6">لا توجد أكواد مطابقة</p>';
+
+    grid.querySelectorAll('[data-copy]').forEach(b => {
+      b.onclick = () => {
+        navigator.clipboard?.writeText(b.dataset.copy);
+        toast('تم نسخ الكود', 'success');
+      };
+    });
+  };
+  drawVCodes();
+
+  el.querySelectorAll('[data-vfilter]').forEach(btn => {
+    btn.onclick = () => {
+      filter = btn.dataset.vfilter;
+      el.querySelectorAll('[data-vfilter]').forEach(x => x.classList.toggle('active', x.dataset.vfilter === filter));
+      drawVCodes();
+    };
+  });
+
+  el.querySelector('#copy-unused-vcodes').onclick = () => {
+    const unused = list.filter(c => !c.used).map(c => c.code).join('\n');
+    if (!unused) { toast('لا توجد أكواد متاحة للنسخ', 'warn'); return; }
+    navigator.clipboard?.writeText(unused);
+    toast('تم نسخ جميع أكواد التحقق المتاحة', 'success');
+  };
+
   el.querySelector('#gen-vcodes').onclick = () => {
     const m = modal({
       title: 'توليد أكواد تحقق',
@@ -402,12 +505,6 @@ async function renderVerifyCodes(el) {
       if (error) toast(error.message, 'error'); else { toast('تم', 'success'); m.close(); location.reload(); }
     };
   };
-  el.querySelectorAll('[data-copy]').forEach(b => {
-    b.onclick = () => {
-      navigator.clipboard.writeText(b.dataset.copy);
-      toast('تم نسخ الكود', 'success');
-    };
-  });
 }
 
 // ==========================================
@@ -455,7 +552,13 @@ async function renderAssistants(el) {
 
   el.querySelectorAll('[data-del-assistant]').forEach(b => {
     b.onclick = async () => {
-      if (!confirm('حذف المساعد نهائياً؟')) return;
+      const ok = await confirmModal({
+        title: 'حذف المساعد',
+        message: 'هل تريد حذف هذا المساعد نهائياً؟',
+        confirmText: 'حذف نهائي',
+        danger: true
+      });
+      if (!ok) return;
       const { error } = await supabase.from('profiles').delete().eq('id', b.dataset.delAssistant);
       if (error) toast(error.message, 'error');
       else { toast('تم الحذف', 'success'); location.reload(); }
@@ -508,7 +611,7 @@ async function renderAdmins(el) {
       const phone = m.root.querySelector('#adm-phone').value.trim();
       if (!phone) { toast('أدخل رقم الهاتف', 'warn'); return; }
       
-      const { data: profile } = await supabase.from('profiles').select('id').eq('phone', phone).single();
+      const { data: profile } = await supabase.from('profiles').select('id').eq('phone', phone).maybeSingle();
       if (!profile) { toast('لا يوجد حساب بهذا الرقم', 'error'); return; }
 
       const { error } = await supabase.from('profiles').update({ role: 'admin' }).eq('id', profile.id);
@@ -521,7 +624,13 @@ async function renderAdmins(el) {
 
   el.querySelectorAll('[data-del-admin]').forEach(b => {
     b.onclick = async () => {
-      if (!confirm('إزالة صلاحية الأدمن من هذا الحساب؟')) return;
+      const ok = await confirmModal({
+        title: 'إزالة صلاحية الأدمن',
+        message: 'هل تريد إزالة صلاحية الأدمن من هذا الحساب؟',
+        confirmText: 'إزالة الصلاحية',
+        danger: true
+      });
+      if (!ok) return;
       await supabase.from('profiles').update({ role: 'student' }).eq('id', b.dataset.delAdmin);
       toast('تم إزالة الصلاحية', 'success'); location.reload();
     };
@@ -544,11 +653,11 @@ function openAddTeacherModal() {
     if (!name || !phone) { toast('الاسم والرقم مطلوبين', 'warn'); return; }
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`https://pephaughlgezamtzphkt.supabase.co/functions/v1/create_teacher`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/create_teacher`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ name, phone, password: pass })
       });
-      const out = await res.json();
+      const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out.error || 'فشل');
       toast('تم. الباسورد: ' + out.default_password, 'success');
       m.close(); location.reload();
@@ -608,7 +717,7 @@ function openEditTeacherModal(t) {
 
       if (newPass.length >= 8) {
         const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(`https://pephaughlgezamtzphkt.supabase.co/functions/v1/admin_update_user`, {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/admin_update_user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
           body: JSON.stringify({ user_id: t.id, new_password: newPass })

@@ -1,7 +1,7 @@
 import { supabase, store, loadAllData } from './config.js';
 
 export function phoneToEmail(phone) {
-  return `${phone.replace(/\s/g, '')}@edu.local`;
+  return `${String(phone || '').replace(/\s/g, '')}@edu.local`;
 }
 
 export async function login(phone, password) {
@@ -13,7 +13,7 @@ export async function login(phone, password) {
   return data.user;
 }
 
-export async function signup({name, phone, parent_phone, grade, password}) {
+export async function signup({ name, phone, parent_phone, grade, password }) {
   const email = phoneToEmail(phone);
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -21,7 +21,9 @@ export async function signup({name, phone, parent_phone, grade, password}) {
     options: { data: { name, phone, parent_phone, grade, role: 'student' } }
   });
   if (error) throw new Error(error.message);
-  try { await supabase.auth.signInWithPassword({ email, password }); } catch {}
+  try {
+    await supabase.auth.signInWithPassword({ email, password });
+  } catch {}
   return data.user;
 }
 
@@ -31,13 +33,22 @@ export async function logout() {
   store.profile = null;
 }
 
-export async function loadProfile() {
-  await new Promise(r => setTimeout(r, 500));
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return null;
+export async function loadProfile(waitMs = 0) {
+  if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+  if (!session) {
+    store.user = null;
+    store.profile = null;
+    return null;
+  }
   store.user = session.user;
   const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-  if (data) { store.profile = data; return data; }
+  if (data) {
+    store.profile = data;
+    return data;
+  }
   return null;
 }
 

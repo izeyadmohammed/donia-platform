@@ -1,6 +1,6 @@
-import { supabase, store, refreshCourses, refreshLectures } from '../config.js';
+import { supabase, store, refreshCourses, refreshLectures, SUPABASE_URL } from '../config.js';
 import { escapeHtml, uid, formatMoney, formatDate } from '../utils.js';
-import { toast, modal } from '../ui.js';
+import { toast, modal, confirmModal } from '../ui.js';
 import { openLectureEditor } from './lesson.js';
 
 export default async function teacherView(el) {
@@ -143,18 +143,18 @@ async function renderCourses(el, p) {
         const courseLectures = store.lectures.filter(l => l.course_id === c.id);
         return `
           <div class="glass-card overflow-hidden">
-            <div class="flex items-center justify-between p-4 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition" onclick="this.nextElementSibling.classList.toggle('hidden')">
-              <div class="flex items-center gap-4">
-                ${c.image ? `<img src="${escapeHtml(c.image)}" class="w-16 h-16 rounded-lg object-cover">` : `<div class="w-16 h-16 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-2xl"><i class="fa-solid fa-book"></i></div>`}
-                <div>
-                  <h3 class="font-bold text-lg text-main">${escapeHtml(c.title)}</h3>
-                  <p class="text-sm text-muted">${escapeHtml(c.grade)} • ${formatMoney(c.price)} • ${courseLectures.length} محاضرة</p>
+            <div class="flex items-center justify-between p-4 gap-3 hover:bg-black/5 dark:hover:bg-white/5 transition">
+              <button type="button" data-toggle-course="${c.id}" aria-expanded="false" class="flex items-center gap-4 text-right flex-1 min-w-0">
+                ${c.image ? `<img src="${escapeHtml(c.image)}" alt="${escapeHtml(c.title)}" class="w-16 h-16 rounded-lg object-cover shrink-0">` : `<div class="w-16 h-16 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-book"></i></div>`}
+                <div class="min-w-0">
+                  <h3 class="font-bold text-lg text-main truncate">${escapeHtml(c.title)}</h3>
+                  <p class="text-sm text-muted tabular-nums">${escapeHtml(c.grade)} · ${formatMoney(c.price)} · ${courseLectures.length} محاضرة</p>
                 </div>
-              </div>
-              <div class="flex gap-2">
-                <button data-add-lect="${c.id}" class="px-3 py-1 bg-green-500/10 text-green-500 rounded-lg text-xs font-bold border border-green-500/20"><i class="fa-solid fa-plus"></i> محاضرة</button>
-                <button data-edit-course="${c.id}" class="px-3 py-1 bg-blue-500/10 text-blue-500 rounded-lg text-xs font-bold border border-blue-500/20"><i class="fa-solid fa-pen"></i></button>
-                <button data-del-course="${c.id}" class="px-3 py-1 bg-red-500/10 text-red-500 rounded-lg text-xs font-bold border border-red-500/20"><i class="fa-solid fa-trash"></i></button>
+              </button>
+              <div class="flex gap-2 shrink-0">
+                <button type="button" data-add-lect="${c.id}" class="px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-lg text-xs font-bold border border-green-500/20"><i class="fa-solid fa-plus"></i> محاضرة</button>
+                <button type="button" data-edit-course="${c.id}" aria-label="تعديل الكورس" class="px-3 py-1 bg-blue-500/10 text-blue-500 rounded-lg text-xs font-bold border border-blue-500/20"><i class="fa-solid fa-pen"></i></button>
+                <button type="button" data-del-course="${c.id}" aria-label="حذف الكورس" class="px-3 py-1 bg-red-500/10 text-red-500 rounded-lg text-xs font-bold border border-red-500/20"><i class="fa-solid fa-trash"></i></button>
               </div>
             </div>
             <div class="hidden border-t border-border bg-black/5 dark:bg-black/20 p-4">
@@ -181,6 +181,15 @@ async function renderCourses(el, p) {
 
   el.querySelector('#add-course').onclick = () => openAddCourseModal(p);
 
+  el.querySelectorAll('[data-toggle-course]').forEach(btn => {
+    btn.onclick = () => {
+      const panel = btn.closest('.glass-card')?.children[1];
+      if (!panel) return;
+      const isHidden = panel.classList.toggle('hidden');
+      btn.setAttribute('aria-expanded', String(!isHidden));
+    };
+  });
+
   el.querySelectorAll('[data-edit-course]').forEach(b => {
     b.onclick = (e) => {
       e.stopPropagation();
@@ -191,7 +200,13 @@ async function renderCourses(el, p) {
   el.querySelectorAll('[data-del-course]').forEach(b => {
     b.onclick = async (e) => {
       e.stopPropagation();
-      if (!confirm('حذف الكورس؟')) return;
+      const ok = await confirmModal({
+        title: 'حذف الكورس',
+        message: 'هل أنت متأكد من حذف هذا الكورس نهائياً؟',
+        confirmText: 'حذف',
+        danger: true
+      });
+      if (!ok) return;
       await supabase.from('courses').delete().eq('id', b.dataset.delCourse);
       toast('تم', 'success'); await refreshCourses(); location.reload();
     };
@@ -215,7 +230,13 @@ async function renderCourses(el, p) {
   el.querySelectorAll('[data-del-lect]').forEach(b => {
     b.onclick = async (e) => {
       e.stopPropagation();
-      if (!confirm('حذف المحاضرة؟')) return;
+      const ok = await confirmModal({
+        title: 'حذف المحاضرة',
+        message: 'هل أنت متأكد من حذف هذه المحاضرة نهائياً؟',
+        confirmText: 'حذف',
+        danger: true
+      });
+      if (!ok) return;
       await supabase.from('lectures').delete().eq('id', b.dataset.delLect);
       toast('تم', 'success'); await refreshLectures(); location.reload();
     };
@@ -267,7 +288,13 @@ async function renderAssistants(el, p) {
 
   el.querySelectorAll('[data-del-assistant]').forEach(b => {
     b.onclick = async () => {
-      if (!confirm('حذف المساعد؟')) return;
+      const ok = await confirmModal({
+        title: 'حذف المساعد',
+        message: 'هل أنت متأكد من حذف هذا المساعد؟',
+        confirmText: 'حذف',
+        danger: true
+      });
+      if (!ok) return;
       await supabase.from('profiles').delete().eq('id', b.dataset.delAssistant);
       toast('تم', 'success'); location.reload();
     };
@@ -327,12 +354,14 @@ async function renderGrading(el, p) {
   let myLectures = store.lectures.filter(l => courseIds.includes(l.course_id));
   let lectureIds = myLectures.map(l => l.id);
 
-  const { data: submissions, error } = await supabase.from('exam_submissions')
-    .select('*')
-    .eq('type', 'essay')
-    .eq('status', 'جاري التصحيح')
-    .in('lecture_id', lectureIds)
-    .order('submitted_at', { ascending: false });
+  const { data: submissions } = lectureIds.length
+    ? await supabase.from('exam_submissions')
+        .select('*')
+        .eq('type', 'essay')
+        .eq('status', 'جاري التصحيح')
+        .in('lecture_id', lectureIds)
+        .order('submitted_at', { ascending: false })
+    : { data: [] };
 
   el.innerHTML = `
     <div class="flex items-center justify-between mb-6 animate-fade-up">
@@ -447,6 +476,7 @@ function openAddCourseModal(p) {
 
   let newImgUrl = '';
   const handleCourseImg = async (file) => {
+    if (!file) return;
     toast('جاري رفع الصورة...', 'info');
     const fileName = `course_${crypto.randomUUID()}.${file.name.split('.').pop()}`;
     const { error } = await supabase.storage.from('images').upload(fileName, file);
@@ -513,6 +543,7 @@ function openEditCourseModal(c) {
 
   let newImgUrl = c.image || '';
   const handleCourseImg = async (file) => {
+    if (!file) return;
     toast('جاري رفع الصورة...', 'info');
     const fileName = `course_${crypto.randomUUID()}.${file.name.split('.').pop()}`;
     const { error } = await supabase.storage.from('images').upload(fileName, file);
@@ -577,12 +608,12 @@ function openAddAssistantModal(p) {
     if (!name || !phone) { toast('الاسم والرقم مطلوبين', 'warn'); return; }
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`https://pephaughlgezamtzphkt.supabase.co/functions/v1/create_assistant`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/create_assistant`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ name, phone, password: pass, teacher_id: p.id })
       });
-      const out = await res.json();
+      const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out.error || 'فشل');
       toast('تم. الباسورد: ' + out.default_password, 'success');
       m.close(); location.reload();
@@ -613,7 +644,7 @@ function openEditAssistantModal(a) {
 
       if (newPass.length >= 8) {
         const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(`https://pephaughlgezamtzphkt.supabase.co/functions/v1/admin_update_user`, {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/admin_update_user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
           body: JSON.stringify({ user_id: a.id, new_password: newPass })

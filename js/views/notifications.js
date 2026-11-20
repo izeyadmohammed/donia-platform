@@ -1,6 +1,6 @@
 import { supabase, store } from '../config.js';
 import { escapeHtml, formatDate } from '../utils.js';
-import { toast } from '../ui.js';
+import { toast, confirmModal } from '../ui.js';
 
 export default async function notificationsView(el) {
   const p = store.profile;
@@ -36,7 +36,7 @@ export default async function notificationsView(el) {
     <div class="max-w-3xl mx-auto animate-fade-up">
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-3xl font-black text-main">الإشعارات</h1>
-        ${notifications?.length ? `<button id="clear-all" class="text-sm text-red-500 hover:underline font-bold">مسح الكل</button>` : ''}
+        ${notifications?.length ? `<button id="clear-all" type="button" class="text-sm text-red-500 hover:underline font-bold">مسح الكل</button>` : ''}
       </div>
 
       ${(!notifications || notifications.length === 0) ? `
@@ -48,7 +48,7 @@ export default async function notificationsView(el) {
       ` : `
         <div class="space-y-3">
           ${notifications.map(n => `
-            <div class="glass-card p-4 flex items-start gap-4 ${!n.read ? 'border-r-4 border-r-blue-500' : ''}" id="notif-${n.id}">
+            <div class="glass-card p-4 flex items-start gap-4 ${!n.read ? 'border-blue-500/40 bg-blue-500/5' : ''}" id="notif-${n.id}">
               <div class="w-10 h-10 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center shrink-0">
                 <i class="fa-solid fa-bell text-sm"></i>
               </div>
@@ -56,7 +56,7 @@ export default async function notificationsView(el) {
                 <p class="font-bold text-main text-sm">${escapeHtml(n.text)}</p>
                 <p class="text-xs text-muted mt-1">${formatDate(n.created_at)}</p>
               </div>
-              <button data-del="${n.id}" class="w-8 h-8 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center justify-center shrink-0" title="مسح الإشعار">
+              <button type="button" data-del="${n.id}" aria-label="مسح الإشعار" class="w-8 h-8 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center justify-center shrink-0" title="مسح الإشعار">
                 <i class="fa-solid fa-xmark text-sm"></i>
               </button>
             </div>
@@ -92,7 +92,13 @@ export default async function notificationsView(el) {
   const clearAll = el.querySelector('#clear-all');
   if (clearAll) {
     clearAll.onclick = async () => {
-      if (!confirm('هل تريد مسح جميع الإشعارات؟')) return;
+      const ok = await confirmModal({
+        title: 'مسح جميع الإشعارات',
+        message: 'هل تريد مسح جميع الإشعارات نهائياً؟',
+        confirmText: 'مسح الكل',
+        danger: true
+      });
+      if (!ok) return;
 
       const { error } = await supabase.from('notifications').delete().eq('user_id', p.id);
 

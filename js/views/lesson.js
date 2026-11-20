@@ -44,6 +44,11 @@ export default async function lessonView(el, params) {
 
   const canEdit = p && (p.role === 'super_admin' || p.id === lecture.teacher_id || (p.role === 'assistant' && p.teacher_id === lecture.teacher_id));
   const { data: course } = await supabase.from('courses').select('*').eq('id', lecture.course_id).single();
+  const { data: allLectures } = await supabase.from('lectures').select('id, title').eq('course_id', lecture.course_id).order('created_at');
+  const currentIndex = (allLectures || []).findIndex(l => l.id === lectureId);
+  const prevLecture = currentIndex > 0 ? allLectures[currentIndex - 1] : null;
+  const nextLecture = currentIndex >= 0 && currentIndex < (allLectures || []).length - 1 ? allLectures[currentIndex + 1] : null;
+
   const isFree = course?.price === 0;
   const isEnrolled = p?.enrolled_courses?.includes(lecture.course_id);
 
@@ -60,36 +65,30 @@ export default async function lessonView(el, params) {
   }
 
   if (p?.role === 'student') {
-    const { data: allLectures } = await supabase.from('lectures').select('id').eq('course_id', lecture.course_id).order('created_at');
-    if (allLectures) {
-      const currentIndex = allLectures.findIndex(l => l.id === lectureId);
-      if (currentIndex > 0) {
-        const prevLectureId = allLectures[currentIndex - 1].id;
-        
-        // هنقرأ بيانات المحاضرة السابقة عشان نعرف فيها إيه
-        const { data: prevLectData } = await supabase.from('lectures').select('*').eq('id', prevLectureId).single();
-        const { data: prevProg } = await supabase.from('student_progress').select('*').eq('student_id', p.id).eq('lecture_id', prevLectureId).maybeSingle();
-        const { data: prevExam } = await supabase.from('exam_submissions').select('*').eq('student_id', p.id).eq('lecture_id', prevLectureId).eq('type', 'mcq').maybeSingle();
-        
-        const hasVideo = (prevLectData?.videos || []).length > 0;
-        const hasAssignment = (prevLectData?.essay_exams || []).length > 0;
-        const hasExam = (prevLectData?.mcq_exams || []).length > 0;
+    if (prevLecture) {
+      const prevLectureId = prevLecture.id;
+      const { data: prevLectData } = await supabase.from('lectures').select('*').eq('id', prevLectureId).single();
+      const { data: prevProg } = await supabase.from('student_progress').select('*').eq('student_id', p.id).eq('lecture_id', prevLectureId).maybeSingle();
+      const { data: prevExam } = await supabase.from('exam_submissions').select('*').eq('student_id', p.id).eq('lecture_id', prevLectureId).eq('type', 'mcq').maybeSingle();
 
-        const isPrevVideoWatched = !hasVideo || prevProg?.video_watched;
-        const isPrevAssignment = !hasAssignment || prevProg?.assignment_submitted;
-        const isPrevExamPassed = !hasExam || (prevExam ? (prevExam.score >= (prevExam.total * 0.6)) : false);
+      const hasVideo = (prevLectData?.videos || []).length > 0;
+      const hasAssignment = (prevLectData?.essay_exams || []).length > 0;
+      const hasExam = (prevLectData?.mcq_exams || []).length > 0;
 
-        if (!isPrevVideoWatched || !isPrevAssignment || !isPrevExamPassed) {
-          el.innerHTML = `
-            <div class="glass-card max-w-lg mx-auto p-8 text-center animate-fade-up border-red-500/20 border-2">
-              <i class="fa-solid fa-lock text-6xl text-red-500 mb-4"></i>
-              <h2 class="text-2xl font-bold mb-2 text-main">المحاضرة مقفولة</h2>
-              <p class="text-muted mb-4">لازم تخلص المحاضرة السابقة الأول (مشاهدة الفيديو + تسليم الواجب + اجتياز الامتحان بنسبة 60%).</p>
-              <a href="#/lesson/${prevLectureId}" class="btn-primary">رجوع للمحاضرة السابقة</a>
-            </div>`;
-          cleanup();
-          return;
-        }
+      const isPrevVideoWatched = !hasVideo || prevProg?.video_watched;
+      const isPrevAssignment = !hasAssignment || prevProg?.assignment_submitted;
+      const isPrevExamPassed = !hasExam || (prevExam ? (prevExam.score >= (prevExam.total * 0.6)) : false);
+
+      if (!isPrevVideoWatched || !isPrevAssignment || !isPrevExamPassed) {
+        el.innerHTML = `
+          <div class="glass-card max-w-lg mx-auto p-8 text-center animate-fade-up border-red-500/20 border-2">
+            <i class="fa-solid fa-lock text-6xl text-red-500 mb-4"></i>
+            <h2 class="text-2xl font-bold mb-2 text-main">المحاضرة مقفولة</h2>
+            <p class="text-muted mb-4">لازم تخلص المحاضرة السابقة الأول (مشاهدة الفيديو + تسليم الواجب + اجتياز الامتحان بنسبة 60%).</p>
+            <a href="#/lesson/${prevLectureId}" class="btn-primary">رجوع للمحاضرة السابقة</a>
+          </div>`;
+        cleanup();
+        return;
       }
     }
 
@@ -98,35 +97,67 @@ export default async function lessonView(el, params) {
     else if (!prog.video_watched) await supabase.from('student_progress').update({ video_watched: true }).eq('id', prog.id);
   }
 
+  const sections = [
+    (lecture.videos || []).length ? { id: 'sec-videos', label: `الفيديوهات (${lecture.videos.length})`, icon: 'fa-circle-play' } : null,
+    (lecture.pdfs || []).length ? { id: 'sec-pdfs', label: `المذكرات (${lecture.pdfs.length})`, icon: 'fa-file-pdf' } : null,
+    (lecture.mcq_exams || []).length ? { id: 'sec-mcq', label: `الامتحانات (${lecture.mcq_exams.length})`, icon: 'fa-list-check' } : null,
+    (lecture.essay_exams || []).length ? { id: 'sec-essay', label: `الواجبات (${lecture.essay_exams.length})`, icon: 'fa-pen-to-square' } : null
+  ].filter(Boolean);
+
   el.innerHTML = `
     <div class="animate-fade-up max-w-5xl mx-auto">
-      <div class="glass-card p-8 relative" id="lesson-wrap">
-        <div class="flex items-center justify-between mb-8 pb-6 border-b border-border">
-          <h1 class="text-3xl font-black text-main">${escapeHtml(lecture.title)}</h1>
-          ${canEdit ? `<button id="edit-btn" class="px-4 py-2 bg-yellow-500/10 text-yellow-600 rounded-lg text-sm font-bold border border-yellow-500/20"><i class="fa-solid fa-pen"></i> تعديل</button>` : ''}
+      <nav aria-label="مسار التنقل" class="flex flex-wrap items-center gap-2 text-xs md:text-sm font-bold text-muted mb-4">
+        <a href="#/home" class="hover:text-primary">الرئيسية</a>
+        <span aria-hidden="true">/</span>
+        <a href="#/courses" class="hover:text-primary">الكورسات</a>
+        <span aria-hidden="true">/</span>
+        <a href="#/courses/${encodeURIComponent(lecture.course_id)}" class="hover:text-primary">${escapeHtml(course?.title || 'الكورس')}</a>
+        <span aria-hidden="true">/</span>
+        <span class="text-main">${escapeHtml(lecture.title)}</span>
+      </nav>
+
+      <div class="glass-card p-6 md:p-8 relative" id="lesson-wrap">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6 pb-5 border-b border-border">
+          <div>
+            ${currentIndex >= 0 ? `<p class="text-xs font-bold text-primary mb-1 tabular-nums">محاضرة ${String(currentIndex + 1).padStart(2, '0')} من ${String((allLectures || []).length).padStart(2, '0')}</p>` : ''}
+            <h1 class="text-2xl md:text-3xl font-black text-main">${escapeHtml(lecture.title)}</h1>
+          </div>
+          ${canEdit ? `<button id="edit-btn" type="button" class="px-4 py-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded-lg text-sm font-bold border border-yellow-500/20"><i class="fa-solid fa-pen"></i> تعديل</button>` : ''}
         </div>
 
+        ${
+          sections.length > 1
+            ? `<div class="flex flex-wrap gap-2 mb-6 pb-4 border-b border-border">
+                ${sections.map((sec) => `<button type="button" data-jump="${sec.id}" class="chip text-xs"><i class="fa-solid ${sec.icon} ml-1"></i>${escapeHtml(sec.label)}</button>`).join('')}
+              </div>`
+            : ''
+        }
+
         <div class="space-y-8">
-          ${(lecture.videos||[]).map(v => `
-            <div class="rounded-xl overflow-hidden bg-black shadow-2xl relative">
-              <div class="relative w-full aspect-video overflow-hidden bg-black" id="vid-container-${v.id}">
-                <div class="video-wrapper absolute inset-0 w-full h-full" id="vid-wrap-${v.id}">
-                  <iframe class="absolute w-[110%] h-[130%] -top-[15%] -left-[5%]" src="${youtubeEmbed(v.url)}?rel=0&modestbranding=1&showinfo=0&iv_load_policy=3&disablekb=1&playsinline=1" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+          ${(lecture.videos||[]).length ? `
+            <div id="sec-videos" class="space-y-6">
+              ${(lecture.videos||[]).map(v => `
+                <div class="rounded-xl overflow-hidden bg-black shadow-2xl relative">
+                  <div class="relative w-full aspect-video overflow-hidden bg-black" id="vid-container-${v.id}">
+                    <div class="video-wrapper absolute inset-0 w-full h-full" id="vid-wrap-${v.id}">
+                      <iframe class="absolute w-[110%] h-[130%] -top-[15%] -left-[5%]" src="${youtubeEmbed(v.url)}?rel=0&modestbranding=1&showinfo=0&iv_load_policy=3&disablekb=1&playsinline=1" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+                    </div>
+                  </div>
+                  <div class="p-3 bg-gray-900 flex justify-between items-center">
+                     <p class="font-bold text-white text-sm">${escapeHtml(v.title)}</p>
+                     <button type="button" data-fullscreen="${v.id}" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition flex items-center gap-2"><i class="fa-solid fa-expand"></i> تكبير الشاشة</button>
+                  </div>
                 </div>
-              </div>
-              <div class="p-3 bg-gray-900 flex justify-between items-center">
-                 <p class="font-bold text-white text-sm">${escapeHtml(v.title)}</p>
-                 <button data-fullscreen="${v.id}" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition flex items-center gap-2"><i class="fa-solid fa-expand"></i> تكبير الشاشة</button>
-              </div>
+              `).join('')}
             </div>
-          `).join('')}
+          ` : ''}
 
           ${(lecture.pdfs||[]).length ? `
-            <div>
+            <div id="sec-pdfs">
               <h3 class="text-xl font-bold mb-4 text-main">المذكرات</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 ${(lecture.pdfs||[]).map(pdf => `
-                  <a target="_blank" href="${escapeHtml(pdf.url)}" class="flex items-center gap-3 p-4 rounded-xl bg-black/5 dark:bg-white/5 border border-border hover:border-red-500/30 transition">
+                  <a target="_blank" rel="noopener" href="${escapeHtml(pdf.url)}" class="flex items-center gap-3 p-4 rounded-xl bg-black/5 dark:bg-white/5 border border-border hover:border-red-500/30 transition">
                     <i class="fa-solid fa-file-pdf text-red-500 text-xl"></i>
                     <span class="font-bold text-sm text-main">${escapeHtml(pdf.title)}</span>
                   </a>
@@ -136,7 +167,7 @@ export default async function lessonView(el, params) {
           ` : ''}
 
           ${(lecture.mcq_exams||[]).length ? `
-            <div>
+            <div id="sec-mcq">
               <h3 class="text-xl font-bold mb-4 text-main">الامتحانات</h3>
               <div class="space-y-3">
                 ${(lecture.mcq_exams||[]).map(ex => `
@@ -150,7 +181,7 @@ export default async function lessonView(el, params) {
           ` : ''}
           
           ${(lecture.essay_exams||[]).length ? `
-            <div>
+            <div id="sec-essay">
               <h3 class="text-xl font-bold mb-4 text-main">الواجبات</h3>
               <div class="space-y-3">
                 ${(lecture.essay_exams||[]).map(ex => `
@@ -163,9 +194,18 @@ export default async function lessonView(el, params) {
             </div>
           ` : ''}
         </div>
+
+        <div class="mt-10 pt-6 border-t border-border flex flex-wrap items-center justify-between gap-3">
+          ${prevLecture ? `<a href="#/lesson/${encodeURIComponent(prevLecture.id)}" class="btn-outline text-sm"><i class="fa-solid fa-arrow-right"></i> السابقة: ${escapeHtml(prevLecture.title)}</a>` : `<a href="#/courses/${encodeURIComponent(lecture.course_id)}" class="btn-outline text-sm"><i class="fa-solid fa-arrow-right"></i> العودة للكورس</a>`}
+          ${nextLecture ? `<a href="#/lesson/${encodeURIComponent(nextLecture.id)}" class="btn-primary text-sm">التالية: ${escapeHtml(nextLecture.title)} <i class="fa-solid fa-arrow-left"></i></a>` : `<a href="#/courses/${encodeURIComponent(lecture.course_id)}" class="btn-primary text-sm">صفحة الكورس <i class="fa-solid fa-arrow-left"></i></a>`}
+        </div>
       </div>
     </div>
   `;
+
+  el.querySelectorAll('[data-jump]').forEach((btn) => {
+    btn.onclick = () => el.querySelector(`#${btn.dataset.jump}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   el.querySelectorAll('[data-fullscreen]').forEach(btn => {
     btn.onclick = () => {
@@ -272,13 +312,13 @@ export async function openLectureEditor(lecture) {
                   </select>
                   <input data-exam="${ei}" data-q="${qi}" data-f="questionText" value="${escapeHtml(q.questionText)}" placeholder="نص السؤال" class="input-field text-sm flex-1">
                 </div>
-                ${(q.type === 'essay' || !q.type) ? '' : (q.options||[]).map((o, oi) => `
+                ${q.type === 'essay' ? '' : (q.options||[]).map((o, oi) => `
                   <div class="flex gap-2 items-center mb-2">
                     <input type="radio" name="correct_${ei}_${qi}" ${q.correctIndex===oi?'checked':''} data-exam="${ei}" data-q="${qi}" data-correct="${oi}" class="accent-blue-500">
                     <input data-exam="${ei}" data-q="${qi}" data-opt="${oi}" value="${escapeHtml(o.text)}" placeholder="خيار" class="input-field text-sm">
                     <button data-del-opt="${ei}_${qi}_${oi}" class="text-red-500">✕</button>
                   </div>`).join('')}
-                ${(q.type === 'essay') ? '' : `<div class="flex gap-2 mt-1"><button data-add-opt="${ei}_${qi}" class="text-blue-500 text-xs font-bold">+ خيار</button></div>`}
+                ${q.type === 'essay' ? '' : `<div class="flex gap-2 mt-1"><button data-add-opt="${ei}_${qi}" class="text-blue-500 text-xs font-bold">+ خيار</button></div>`}
               </div>
             `).join('')}
             <button data-add-q="${ei}" class="text-blue-500 text-xs font-bold mt-1">+ سؤال</button>
@@ -326,15 +366,29 @@ export async function openLectureEditor(lecture) {
         
         if (isEssayTab) {
           if (qi !== undefined) {
-            local.essay_exams[+ei].questions[+qi][f] = inp.value;
-            if (f === 'type') renderTab();
+            const qObj = local.essay_exams[+ei].questions[+qi];
+            qObj[f] = inp.value;
+            if (f === 'type') {
+              if (inp.value === 'mcq' && (!Array.isArray(qObj.options) || qObj.options.length === 0)) {
+                qObj.options = [{ text: '' }, { text: '' }];
+                qObj.correctIndex = 0;
+              }
+              renderTab();
+            }
           } else {
             local.essay_exams[+ei][f] = inp.value;
           }
         } else if (ei !== undefined) {
           if (qi !== undefined) {
-            local.mcq_exams[+ei].questions[+qi][f] = inp.value;
-            if (f === 'type') renderTab();
+            const qObj = local.mcq_exams[+ei].questions[+qi];
+            qObj[f] = inp.value;
+            if (f === 'type') {
+              if (inp.value === 'mcq' && (!Array.isArray(qObj.options) || qObj.options.length === 0)) {
+                qObj.options = [{ text: '' }, { text: '' }];
+                qObj.correctIndex = 0;
+              }
+              renderTab();
+            }
           } else local.mcq_exams[+ei][f] = inp.value;
         } else if (i !== undefined) {
           local[currentTab === 'videos' ? 'videos' : 'pdfs'][+i][f] = inp.value;
@@ -343,8 +397,16 @@ export async function openLectureEditor(lecture) {
     });
 
     // أحداث الخيارات (الامتحانات والواجبات)
-    content.querySelectorAll('[data-opt]').forEach(inp => { inp.oninput = () => { local.mcq_exams[+inp.dataset.exam].questions[+inp.dataset.q].options[+inp.dataset.opt].text = inp.value; }; });
-    content.querySelectorAll('[data-correct]').forEach(r => { r.onchange = () => { 
+    content.querySelectorAll('[data-opt]').forEach(inp => {
+      inp.oninput = () => {
+        if (inp.dataset.essay !== undefined) {
+          local.essay_exams[+inp.dataset.essay].questions[+inp.dataset.q].options[+inp.dataset.opt].text = inp.value;
+        } else {
+          local.mcq_exams[+inp.dataset.exam].questions[+inp.dataset.q].options[+inp.dataset.opt].text = inp.value;
+        }
+      };
+    });
+    content.querySelectorAll('[data-correct]').forEach(r => { r.onchange = () => {
         const isEssay = r.name.startsWith('correct_essay_');
         if (isEssay) local.essay_exams[+r.dataset.essay].questions[+r.dataset.q].correctIndex = +r.dataset.correct;
         else local.mcq_exams[+r.dataset.exam].questions[+r.dataset.q].correctIndex = +r.dataset.correct;

@@ -1,6 +1,6 @@
 import { supabase, store } from '../config.js';
-import { escapeHtml, lockExamPage, watermark } from '../utils.js';
-import { toast } from '../ui.js';
+import { escapeHtml, lockExamPage, watermark, calcAssignmentMcqScore } from '../utils.js';
+import { toast, modal, confirmModal } from '../ui.js';
 
 export default async function assignmentView(el, params) {
   const p = store.profile;
@@ -24,7 +24,7 @@ export default async function assignmentView(el, params) {
         ${existing.status === 'تم التصحيح' ? `<p class="text-green-400 font-black text-2xl mb-4">الدرجة: ${existing.grade ?? '-'}</p>` : ''}
         ${existing.teacher_note ? `<p class="text-sm bg-soft p-3 rounded-lg mb-4 text-muted">ملاحظة المدرس: ${escapeHtml(existing.teacher_note)}</p>` : ''}
         ${existing.answer && existing.answer.startsWith('http') ? `<img src="${existing.answer}" class="max-h-48 mx-auto rounded-lg mb-4 border border-border">` : ''}
-        <a href="#/courses/${lectureId}" class="btn-primary">رجوع للكورس</a>
+        <a href="${existing.course_id ? `#/courses/${existing.course_id}` : `#/lesson/${lectureId}`}" class="btn-primary">رجوع</a>
       </div>`;
     return;
   }
@@ -41,15 +41,6 @@ export default async function assignmentView(el, params) {
   
   // مصفوفة لحفظ إجابات الأسئلة الاختيارية
   const mcqAnswers = new Array((ex.questions || []).length).fill(null);
-
-  // حساب درجة الأسئلة الاختيارية
-  function calcMcqScore() {
-    let correct = 0;
-    (ex.questions || []).forEach((q, i) => {
-      if (mcqAnswers[i] === q.correctIndex) correct++;
-    });
-    return { correct, total: (ex.questions || []).length };
-  }
 
   el.innerHTML = `
     <div class="glass-card max-w-3xl mx-auto p-8 relative animate-fade-up" id="assign-wrap">
@@ -105,6 +96,7 @@ export default async function assignmentView(el, params) {
   if (mcqContainer) {
     (ex.questions || []).forEach((q, qi) => {
       const qDiv = document.createElement('div');
+      qDiv.dataset.qCard = '1';
       qDiv.className = 'bg-black/5 dark:bg-black/20 p-4 rounded-xl border border-border';
       qDiv.innerHTML = `
         <p class="font-bold mb-3 text-main">${qi + 1}. ${escapeHtml(q.questionText)}</p>
@@ -125,9 +117,8 @@ export default async function assignmentView(el, params) {
       radio.onchange = () => {
         const qi = +radio.dataset.q;
         mcqAnswers[qi] = +radio.dataset.o;
-        // إعادة رسم السؤال لتحديث اللون
-        const parentDiv = radio.closest('.bg-black\\/5');
-        parentDiv.querySelectorAll('label').forEach(l => {
+        const parentDiv = radio.closest('[data-q-card]');
+        parentDiv?.querySelectorAll('label').forEach(l => {
           l.className = 'flex items-center gap-3 p-3 rounded-lg cursor-pointer transition hover:bg-black/5 dark:hover:bg-soft border border-transparent';
         });
         radio.closest('label').className = 'flex items-center gap-3 p-3 rounded-lg cursor-pointer transition bg-blue-500/20 border border-blue-500/30';
@@ -156,7 +147,7 @@ export default async function assignmentView(el, params) {
 
   const intv = setInterval(() => {
     timeLeft--;
-    const m = Math.floor(timeLeft / 60), s = timeLeft % 60;
+    const m = Math.floor(Math.max(0, timeLeft) / 60), s = Math.max(0, timeLeft) % 60;
     timer.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     if (timeLeft <= 0) { clearInterval(intv); submit(true); }
   }, 1000);
@@ -165,14 +156,22 @@ export default async function assignmentView(el, params) {
     if (document.hidden && !isSubmitted) {
       exitWarnings++;
       if (exitWarnings === 1) {
-        alert('تحذير: لقد خرجت من صفحة الواجب. المرة القادمة سيتم التسليم تلقائياً!');
+        modal({
+          title: 'تنبيه مراقبة الواجب',
+          body: '<p class="text-main leading-relaxed">لقد غادرت صفحة الواجب. في المرة القادمة سيتم التسليم تلقائياً.</p>',
+          actions: '<button type="button" onclick="this.closest(\'.fixed\').remove()" class="btn-primary text-sm">فهمت، متابعة الحل</button>'
+        });
       } else {
-        alert('لقد خرجت مرة أخرى. سيتم تسليم الواجب الآن.');
+        toast('تم رصد مغادرة أخرى — جاري التسليم التلقائي', 'warn');
         submit(true);
       }
     }
   };
   document.addEventListener('visibilitychange', visibilityHandler);
+  window.addEventListener('hashchange', () => {
+    clearInterval(intv);
+    document.removeEventListener('visibilitychange', visibilityHandler);
+  }, { once: true });
 
   async function submit(force = false) {
     if (isSubmitted) return;
@@ -187,17 +186,10 @@ export default async function assignmentView(el, params) {
     document.removeEventListener('visibilitychange', visibilityHandler);
 
     try {
-      const mcqResult = calcMcqScore();
+      const mcqResult = calcAssignmentMcqScore(ex.questions || [], mcqAnswers);
       const finalAnswer = uploadedImageUrl ? uploadedImageUrl : textAnswer;
-      
-      // تحويل إجابات الأسئلة الاختيارية لنص عشان تتحفظ
-      const mcqAnswersText = (ex.questions || []).map((q, i) => {
-        const chosen = mcqAnswers[i] !== null ? q.options[mcqAnswers[i]].text : 'لم يجب';
-        const correct = q.options[q.correctIndex].text;
-        return `س${i+1}: إجابتك (${chosen}) - الصح (${correct})`;
-      }).join('\n');
-      
-      const fullAnswer = (mcqAnswersText ? `الاختياري: ${mcqResult.correct}/${mcqResult.total}\n${mcqAnswersText}\n\n` : '') + (finalAnswer ? `المقالي: ${finalAnswer}` : '');
+      const mcqHeader = mcqResult.total ? `الاختياري: ${mcqResult.correct}/${mcqResult.total}\n${mcqResult.summary}\n\n` : '';
+      const fullAnswer = mcqHeader + (finalAnswer ? `المقالي: ${finalAnswer}` : '');
 
       const { error } = await supabase.from('exam_submissions').insert({
         id: 'sub_' + Date.now(), 
@@ -213,7 +205,7 @@ export default async function assignmentView(el, params) {
       
       if (error) throw new Error(error.message);
 
-      const { data: prog } = await supabase.from('student_progress').select('id').eq('student_id', p.id).eq('lecture_id', lectureId).single();
+      const { data: prog } = await supabase.from('student_progress').select('id').eq('student_id', p.id).eq('lecture_id', lectureId).maybeSingle();
       if (prog) await supabase.from('student_progress').update({ assignment_submitted: true }).eq('id', prog.id);
       else await supabase.from('student_progress').insert({ student_id: p.id, lecture_id: lectureId, assignment_submitted: true });
 
@@ -225,5 +217,13 @@ export default async function assignmentView(el, params) {
     }
   }
 
-  el.querySelector('#sub').onclick = () => { if(confirm('تأكيد تسليم الواجب؟')) submit(); };
+  el.querySelector('#sub').onclick = async () => {
+    const ok = await confirmModal({
+      title: 'تأكيد تسليم الواجب',
+      message: 'هل أنت متأكد من تسليم الواجب النهائي؟ لن تتمكن من تعديل إجاباتك بعد التسليم.',
+      confirmText: 'تسليم الواجب',
+      cancelText: 'مراجعة الحل'
+    });
+    if (ok) submit();
+  };
 }

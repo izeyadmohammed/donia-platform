@@ -1,0 +1,16 @@
+{
+  "name": "donia-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Single-teacher educational platform with courses, lectures, exams, assignments, wallet codes, and notifications.",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node -e \"console.log('Static site ready for serving')\"",
+    "lint": "node --input-type=module -e \"import fs from 'node:fs'; import { execFileSync } from 'node:child_process'; const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.name === 'node_modules' || e.name.startsWith('.') ? [] : e.isDirectory() ? walk(d + '/' + e.name) : e.name.endsWith('.js') ? [d + '/' + e.name] : []); for (const f of walk('.')) execFileSync('node', ['--check', f], { stdio: 'inherit' }); console.log('All JS files passed syntax check');\""
+  },
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
